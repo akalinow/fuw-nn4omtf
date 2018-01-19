@@ -2,10 +2,10 @@
 
 from distutils.core import setup
 
-setup(name='CMS-NN',
+setup(name='nnomtf',
         version='1.0',
-        description='Neural Networks tools for CMS experiment',
+        description='Neural Networks tools for OMTF',
         author='Jacek Łysiak',
         author_email='jaceklysiako.o@gmail.com',
-        packages=[],
+        packages=['nnomtf', 'nnomtf.utils', 'nnomtf.dataset', 'nnomtf.network']
     )
