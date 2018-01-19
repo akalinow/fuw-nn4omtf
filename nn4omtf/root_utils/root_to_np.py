@@ -2,6 +2,7 @@
     Copyright (C) 2018 Jacek Łysiak
     MIT license
 
+    INFO:
     It could be tougt to install ROOT and related python packages.
     I've used docker image to solve this problem.
 """
@@ -64,36 +65,22 @@ def root_to_numpy(data):
 def load_root_dict(path):
     """
     Loads ROOT's 'omtfPatternMaker/OMTFHitsTree' dictionary file.
+
+    @akalinow script generates simulation of OMTF work.
+    This method is to import that files (or directiries)
+    
+    @todo 19.01.2018 generify or setup some interface between scripts
+
+    some old code... matching directories with omtf data
+    directory name was coding muon parameters
+
+    r = re.compile(r"(?P<name>[A-Za-z]+)_(?P<val>[0-9]+)_(?P<sign>[pm])")
+    for el in os.listdir(path):
+        m = r.match(el)
+        d = m.groupdict()
+        print("[%3d / %3d]> " % (i, l), d['name'], d['val'], d['sign'])
+        arr = root2array(os.path.join(path,el,filename), 'omtfPatternMaker/OMTFHitsTree')
     """
     return root2array(path, 'omtfPatternMaker/OMTFHitsTree')
 
-
-# ---
-
-filename = 'OMTFHitsData.root'
-try:
-	path = sys.argv[1]
-	dest = sys.argv[2]
-except Exception:
-	print("Give dataset root path and dest")
-	sys.exit(1)
-
-print("Dataset root path: %s" % path)
-print("Looking for data...")
-r = re.compile(r"(?P<name>[A-Za-z]+)_(?P<val>[0-9]+)_(?P<sign>[pm])")
-
-i = 1
-l = len(os.listdir(path))
-start_time = time.time()
-for el in os.listdir(path):
-	last = time.time()
-	m = r.match(el)
-	d = m.groupdict()
-	print("[%3d / %3d]> " % (i, l), d['name'], d['val'], d['sign'])
-	arr = root2array(os.path.join(path,el,filename), 'omtfPatternMaker/OMTFHitsTree')
-	prod, omtf, h14, h2 = root_to_numpy(arr)
-	np.savez_compressed(file=os.path.join(dest,"%s-%s-%s" % (d['name'].lower(), d['val'], d['sign'])), name=d['name'], val=int(d['val']), sign=d['sign'], prod=prod, omtf=omtf, hits14=h14, hits2=h2)
-	print("Done!")
-	print("Last: %.3fs Elapsed: %.3fs" % (time.time() - last, time.time() - start_time))
-	i += 1
 

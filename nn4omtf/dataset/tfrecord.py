@@ -62,7 +62,7 @@ class TFRecordsGenerator:
 
     def _check_input_paths(self, npz_paths):
         for f in npz_paths: # Check file existence
-            if !os.path.exists(f):
+            if not os.path.exists(f):
                 raise FileNotFoundError("File %s doesn't exist" % f)
 
 
