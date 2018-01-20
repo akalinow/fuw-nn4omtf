@@ -13,6 +13,7 @@ Content
 --------------
 
 Package contains:
+
 * OMTFDataset - handles data from Monte Carlo OMTF simulation, set of TFRecord files
 * OMTFNN - wrapper for network and its metadata
 * OMTFNNStorage - manager of OMTFNNs, helps keeping whole data in one place
