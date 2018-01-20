@@ -79,4 +79,19 @@ class OMTFNN:
         """@todo Load trained model."""
         pass
 
+    
+    def get_class_count(self):
+        """Return number of defined momentum classes for classifier.
+        
+        It's used in OMTFNNTrainer.
+        """
+        pass
+
+
+    def get_class_bins(self):
+        """Return momentum class bins' edges.
+        
+        It's used in OMTFNNTrainer.
+        """
+        pass
 
