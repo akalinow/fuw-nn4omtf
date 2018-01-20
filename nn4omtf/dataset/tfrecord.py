@@ -14,7 +14,7 @@ import tensorflow as tf
 import os
 
 
-class TFRecordsGenerator:
+class OMTFDatasetGenerator:
     """
     Class generating a bit customized dataset in multi-file TFRecords format.
     """
