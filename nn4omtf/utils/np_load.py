@@ -16,15 +16,25 @@
 
 import numpy as np
 
+__all__ = ['save_npz', 'load_npz']
+
 
 def save_npz(filename, pt_code, sign, data_arrays):
     """
     Save data stored in np.arrays along with momentum code and mouon sign in *.npz file.
     """
-    np.savez_compressed(file=filename, pt_code=pt_code, sign=sign, prod=data_arrays[0], omtf=data_arrays[1], hits=data_arrays[2], hits2=data_arrays[3])
+    np.savez_compressed(
+            file=filename, 
+            pt_code=pt_code, 
+            sign=sign, 
+            prod=data_arrays[0], 
+            omtf=data_arrays[1], 
+            hits=data_arrays[2], 
+            hits2=data_arrays[3])
 
 
 def load_npz(filename):
     """Load numpy compressed file."""
+    pass
 
 

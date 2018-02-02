@@ -1,6 +1,6 @@
-from . import dataset
-from . import network
-from . import utils
+from nn4omtf import dataset
+from nn4omtf import network
+from nn4omtf import utils
 
 def info():
     print("""

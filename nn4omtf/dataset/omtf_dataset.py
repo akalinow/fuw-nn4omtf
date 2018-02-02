@@ -6,8 +6,6 @@ class OMTFDataset:
     It's used for mapping and file paths extracting.
     """
     
-    HITS_TYPE_FULL = "FULL"
-    HITS_TYPE_REDUCED = "REDUCED"
 
     def __init__(self, path):
         self.root_path = path

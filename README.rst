@@ -20,3 +20,10 @@ Package contains:
 * OMTFNNTrainer - trains prepared models
 * OMTFDatasetGenerator - imports data from OMTF simulations and saves as TFRecords files
 
+To do...
+--------------
+
+* Saving model, trained data in OMTFNN
+* Reseting/clearing trained model (cloning?)
+* Possibility of dumping model, getting pure varables in bytes or whatever
+* saving runs statistics for tb localy, variables and model should be small enougth to push on repo, dataset could be available on cloud

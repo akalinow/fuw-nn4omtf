@@ -1,2 +1,3 @@
-from .np_load import save_npz
-from .np_load import load_npz
+from nn4omtf.utils.net_utils import *
+from nn4omtf.utils.np_load import *
+from nn4omtf.utils.py_utils import *
