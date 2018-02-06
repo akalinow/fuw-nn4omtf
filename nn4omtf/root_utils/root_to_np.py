@@ -49,6 +49,7 @@ def load_root_dict(path):
     if m is None:
         raise ValueError("Provided path does not match pattern: name_[0-9]+_[pm]")
     d = m.groupdict()
+    d['val'] = int(d['val'])
     return root2array(fpath, 'omtfPatternMaker/OMTFHitsTree'), d
 
 
@@ -78,7 +79,7 @@ def root_to_numpy(name, sign, ptcode, data):
     prod = []
     hits14 = []
     hits2 = []
-    pt_max = data[0][1][0]
+    pt_max = data[0][1]
     pt_min = pt_max
     def get_hits(hits):
         r18x14 = []
