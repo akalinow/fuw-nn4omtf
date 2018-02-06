@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from nn4omtf import dataset
 from nn4omtf import network
 from nn4omtf import utils
