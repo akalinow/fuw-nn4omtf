@@ -6,6 +6,10 @@
     Dataset package consts.
 """
 
+
+__all__ = ['HITS_TYPE', 'NPZ_FIELDS']
+
+
 class HITS_TYPE:
     FULL = "FULL"
     FULL_SHAPE = [18, 14]
@@ -13,4 +17,16 @@ class HITS_TYPE:
     REDUCED = "REDUCED"
     REDUCED_SHAPE = [18, 2]
 
-__all__ = ['HITS_TYPE']
+
+class NPZ_FIELDS:
+    PROD = "prod"
+    OMTF = "omtf"
+    HITS_FULL = "hits_full"
+    HITS_REDUCED = "hits_reduced"
+    PT_CODE = "pt_code"
+    PT_MIN = "pt_min"
+    PT_MAX = "pt_max"
+    EV_N = "ev_n"
+    NAME = "name"
+    SIGN = "sign"
+
