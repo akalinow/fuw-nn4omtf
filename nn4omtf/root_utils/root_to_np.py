@@ -46,7 +46,7 @@ def load_root_dict(path):
     basename = os.path.basename(path)
     r = re.compile(r"(?P<name>[A-Za-z]+)_(?P<val>[0-9]+)_(?P<sign>[pm])")
     m = r.match(basename)
-    if m in None:
+    if m is None:
         raise ValueError("Provided path does not match pattern: name_[0-9]+_[pm]")
     d = m.groupdict()
     return root2array(fpath, 'omtfPatternMaker/OMTFHitsTree'), d
