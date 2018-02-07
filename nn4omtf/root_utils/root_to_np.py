@@ -67,6 +67,10 @@ def root_to_numpy(name, sign, ptcode, data):
         - Moun prodution data: {MuonPt, MuonPhi, MuonEta, MuonCharge}
         - OMTF simulation data: {omtfCharge, omtfPt, omtfEta, omtfQuality, omtfHits, omtfRefLayer}
 
+    Note: 
+        ROOT dicts are not imported as ndarray. They cannot be sliced and iterated using numpy tools.
+        Single dict conversion can last a few minutes.
+
     Args: 
         name: extracted name from parent directory
         sign: muon charge's sign
