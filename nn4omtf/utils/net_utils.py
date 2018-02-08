@@ -19,7 +19,8 @@ __all__ = [
         'jupyter_display',
         'save_string_as',
         'store_graph',
-        'signature_from_dict']
+        'signature_from_dict',
+        'float_feature']
 
 
 def weight_variable(shape, name=None):
@@ -184,3 +185,7 @@ def signature_from_dict(sig_dict):
             }
     return signature
 
+
+def float_feature(value):
+    """Creates TensorFlow feature from value."""
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
