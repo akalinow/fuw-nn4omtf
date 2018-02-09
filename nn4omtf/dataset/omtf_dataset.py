@@ -5,9 +5,12 @@
 
 """
 
+import time
 import os
 import pickle
+import tensorflow as tf
 from nn4omtf.utils import load_dict_from_npz, float_feature
+from nn4omtf.dataset.const import NPZ_FIELDS
 
 
 class OMTFDataset:
@@ -19,11 +22,13 @@ class OMTFDataset:
             'events_frac': 1.0,
             'train_frac': 0.7,
             'valid_frac': 0.15,
+            'test_frac': 0.15,
             'compress': False,
     }
 
 
     class CONST:
+        TF_FILENAME = '{name}-{code}-{sign}.tfrecords'
         OBJ_FILENAME = ".dataset"
         SET_NAMES = ['train', 'valid', 'test']
 
@@ -46,7 +51,7 @@ class OMTFDataset:
         self.objfile = os.path.join(self.path, OMTFDataset.CONST.OBJ_FILENAME)
         assert not os.path.exists(self.objfile), "Directory already contains dataset object!"
         self.params = OMTFDataset.DEFAULT_PARAMS
-        for k, v in kw:
+        for k, v in kw.items():
             if k in self.params:
                 self.params[k] = v
         self._calc_events_frac()
@@ -72,6 +77,7 @@ class OMTFDataset:
         assert os.path.exists(filepath), "Directory doesn't contain dataset object!"
         with open(filepath, 'rb') as f:
             obj = pickle.load(f)
+        obj.path = path
         return obj
 
 
@@ -81,7 +87,8 @@ class OMTFDataset:
         os.makedirs(self.path, exist_ok=True)
         with open(filepath, 'wb') as f:
             pickle.dump(obj=self, file=f)
-        
+
+
     def _calc_events_frac(self):
         assert 0 <= self.params['events_frac'] <= 1, "Events fraction must be float in range [0, 1]"
         assert 0 <= (self.params['train_frac'] + self.params['valid_frac']) <= 1, "train + valid frac must be in [0, 1] range"
@@ -108,17 +115,17 @@ class OMTFDataset:
         return l, len(l)
 
 
-    def add_npz_to_dataset(self, files):
+    def add_npz_to_dataset(self, files, verbose=False):
         """Add data examples from npz files.
         Args:
             files: list of npz files to import
         """
+        cnt = 1
         for f in files:
-            self._add_npz_file(f)
-
-    def _add_npz_file(self, f):
-        data = load_dict_from_npz(f)
-
+            if verbose:
+                print("Processing file [{}/{}]: {}".format(cnt, len(files), f))
+            self._add_npz_file(f, verbose)
+            cnt += 1
 
 
     def get_summary(self):
@@ -128,7 +135,7 @@ class OMTFDataset:
         for name, sets in self.sets.items():
             summary += "\nset: {}\n".format(name)
             for el in sets:
-                summary += "> code: {code}, pt_min: {pt_min}, pt_max: {pt_max}\npath: {path}\n".format(**el)
+                summary += "> events: {events}, code: {code}, sign: {sign}, pt_min: {pt_min}, pt_max: {pt_max}\npath: {path}\n".format(**el)
         return summary
 
 
@@ -136,9 +143,7 @@ class OMTFDataset:
         return self.get_summary()
     
     
-
-
-    def _save_tfrecords(self, filename, **kw):
+    def _save_tfrecords(self, filename, begin, end, **kw):
         """Save single TFRecords file.
         Args:
             filename: TFRecords files
@@ -146,81 +151,54 @@ class OMTFDataset:
         """
         writer = tf.python_io.TFRecordWriter(filename, self.write_opt)
         for i in range(begin, end):
-            feature = {k, float_feature(v[i]) for k, v in kw.items()}
-            features = tf.train.Features(feature)
+            feature = dict((k, float_feature(v[i].reshape(-1))) for k, v in kw.items())
+            features = tf.train.Features(feature=feature)
             event = tf.train.Example(features=features)
             writer.write(event.SerializeToString())
         writer.close()
 
-    def generate(self):
-        """Start generating dataset."""
-        self.time_start = time.time()
-        self._log("Set generation started.")
 
-        # If directory exists - remove subtree
-        if os.path.exists(self.out_path):
-            shutil.rmtree(self.out_path)
-
-        # Prepare output directories
-        self.out_path_train = os.path.join(self.out_path, self.dir_name_train)
-        self.out_path_valid = os.path.join(self.out_path, self.dir_name_valid)
-        self.out_path_test = os.path.join(self.out_path, self.dir_name_test)
-        os.makedirs(self.out_path_train)
-        os.makedirs(self.out_path_valid)
-        os.makedirs(self.out_path_test)
-
-        self.time_last = time.time()
-        for f in self.in_files:
-            self._log("Converting file: %s" % f)
-
-            self._convert_file(f)
-
-            self.time_now = time.time()
-            self._log("Done... [Tfile: %.3fs, Tall: %.3fs]" % (self.time_now - self.time_last, self.time_now - self.time_start))
-            self.time_last = self.time_now
-
-        self._log("Dataset saved in %s" % self.out_path)
-        self._log("Total time: %.3fs" % (self.time_last - self.time_start))
-
-
-    def _convert_file(self, path):
-        """Convert single file."""
-        
-        in_data = np.load(path, encoding='bytes')
-        name = in_data['name']
-        val = in_data['val']
-        sign = in_data['sign']
-        prod = in_data['prod']
-        omtf = in_data['omtf']
-        hits = in_data['hits' if self.save_full_hits else 'hits2']
-
-        ev_all = prod.shape[0]
-        ev_save = int(ev_all * self.ev_frac)
-        ev_train = int(ev_save * self.ev_train_frac)
-        ev_valid = int(ev_save * self.ev_valid_frac)
-        ev_test = ev_all - ev_train - ev_valid
-        suffix =  '%s-%d-%s.tfrecords' % (str(name).lower(), val, sign)
-        out_file_train = os.path.join(self.out_path_train, suffix)
-        out_file_valid = os.path.join(self.out_path_valid, suffix)
-        out_file_test = os.path.join(self.out_path_test, suffix)
-
-        self._print_file_metric(name, val, sign, ev_all, ev_save, ev_train, ev_valid, ev_test, self.out_path, suffix)
-
-        self._save_tfrecords(out_file_train, hits, prod, omtf, 0, ev_train)
-        self._save_tfrecords(out_file_valid, hits, prod, omtf, ev_train, ev_train + ev_valid)
-        self._save_tfrecords(out_file_test, hits, prod, omtf, ev_train + ev_valid, ev_save)
-
-
-    def _print_file_metric(self, name, val, sign, ev_all, ev_save, ev_train, ev_valid, ev_test, out_path, suffix):
-        info = "input file: %s\n" % name
-        info += "output path: %s\n" % out_path
-        info += "output file suffix: %s\n " % suffix
-        info += "pt code: %d\n" % val
-        info += "charge: %s\n" % sign
-        info += "events:\n all: %d\n" % ev_all
-        info += " to save: %d\n" % ev_save
-        info += " in train set: %d\n" % ev_train
-        info += " in valid set: %d\n" % ev_valid
-        info += " in test set: %d\n" % ev_test
-        self._log(info)
+    def _add_npz_file(self, f, verbose=False):
+        time_start = time.time()
+        data = load_dict_from_npz(f)
+        name = data[NPZ_FIELDS.NAME]
+        code = data[NPZ_FIELDS.PT_CODE]
+        sign = data[NPZ_FIELDS.SIGN]
+        to_save_list = [NPZ_FIELDS.HITS_FULL, 
+                        NPZ_FIELDS.HITS_REDUCED, 
+                        NPZ_FIELDS.OMTF,
+                        NPZ_FIELDS.PROD]
+        data_to_save = dict([(k, data[k]) for k in to_save_list])
+        ev_all = data[NPZ_FIELDS.EV_N]
+        ev_save = int(self.params['events_frac'] * ev_all)
+        if verbose:
+            print("Events in file: %d" % ev_all)
+            print("Events to save: %d (%0.2f%% of  all)" % (ev_save, ev_save * 100. / ev_all))
+        filename = OMTFDataset.CONST.TF_FILENAME.format(
+                name=str(name).lower(),
+                code=code,
+                sign=sign)
+        ev_a = 0
+        ev_b = 0
+        for setname in self.CONST.SET_NAMES:
+            filepath = os.path.join(self.path, setname, filename)
+            ev = int(ev_save * self.params[setname + '_frac'])
+            ev_b += ev
+            if verbose:
+                print("Saving %d events into '%s' set (%s)" % (ev, setname, filepath))
+            self._save_tfrecords(filepath, ev_a, ev_b, **data_to_save)
+            ev_a += ev
+            info = {
+                "path": os.path.join(setname, filename),
+                "code": code,
+                "sign": sign,
+                "name": name,
+                "events": ev,
+                "pt_min": data[NPZ_FIELDS.PT_MIN],
+                "pt_max": data[NPZ_FIELDS.PT_MAX]
+            }
+            self.sets[setname].append(info)
+        time_elapsed = time.time() - time_start
+        if verbose:
+            print("Finished in: %d''%d'" % (time_elapsed // 60, int(time_elapsed) % 60))
 
