@@ -8,7 +8,7 @@
 
 import tensorflow as tf
 from IPython.display import clear_output, Image, display, HTML
-
+import numpy as np
 
 __all__ = [
         'weight_variable', 
@@ -118,7 +118,7 @@ def get_visualizer_iframe_string(graph_def, width=1024, height=768):
     """.format(data=repr(str(graph_def)), id='graph'+str(np.random.rand()), height=height)
   
     iframe = """
-        <iframe seamless style="width:{}px;height:{}px;border:1" srcdoc="{}"></iframe>
+        <iframe seamless style="width:{}px;height:{}px;border:0" srcdoc="{}"></iframe>
     """.format(width, height, code.replace('"', '&quot;'))
     return iframe
 

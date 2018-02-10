@@ -18,7 +18,6 @@ Package (will) contain:
 To do
 --------------
 
-- [x] api for ROOT dicts conversion
-- [ ] creating, saving, restoring model with OMTFNN
-- [ ] possibility of dumping model, getting pure varables in bytes or whatever
-- [ ] saving runs statistics for tb localy, variables and model should be small enougth to push on repo, dataset could be available on cloud
+* creating, saving, restoring model with OMTFNN
+* possibility of dumping model, getting pure varables in bytes or whatever
+* saving runs statistics for tb localy, variables and model should be small enougth to push on repo, dataset could be available on cloud
