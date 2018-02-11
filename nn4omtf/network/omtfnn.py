@@ -12,6 +12,7 @@ import tensorflow as tf
 import os
 import numpy as np
 import pickle
+import re
 
 import nn4omtf.utils as utils
 from nn4omtf.dataset.const import HITS_TYPE
@@ -33,6 +34,7 @@ class OMTFNN:
         IN_NAME = "IN"
         OUT_NAME = "OUT"
         MODEL_DIR = "model"
+        RUNLOG_DIR = "logs"
 
 
     def __init__(self, name, path, builder_fn):
@@ -68,7 +70,6 @@ class OMTFNN:
         self.signature_def_map = signature_def_map
         self.pt_class = pt_class
         self.in_type = in_type
-
         # Save network object
         self.save()
 
@@ -88,7 +89,15 @@ class OMTFNN:
         network = OMTFNN(name=name, path=path, builder_fn=fn)
         return network
 
- 
+    def _update(self, path):
+      """Update paths"""
+      self.path = path
+
+
+    def get_log_dir(self):
+        return os.path.join(self.path, OMTFNN.CONST.RUNLOG_DIR)
+
+
     def load(path):
         """Load saved model object.
         Args:
@@ -97,7 +106,7 @@ class OMTFNN:
         filename = os.path.join(path, OMTFNN.CONST.OBJ_FILENAME)
         with open(filename, 'rb') as f:
             obj = pickle.load(f)
-        obj.path = path
+        obj._update(path)
         return obj
 
 
@@ -158,16 +167,6 @@ class OMTFNN:
         return g.as_graph_def(), signature_def_map, pt_class, intype
 
 
-    def get_class_count(self):
-        """Return number of defined momentum classes for classifier."""
-        return len(self.pt_class)
-
-
-    def get_class_bins(self):
-        """Return momentum class bins' edges."""
-        return self.pt_class
-
-
     def is_valid_object(path):
         """Static method to check whether given directory contains valid neural network object.
         Args:
@@ -207,7 +206,6 @@ class OMTFNN:
         saver.save(self.sess, save_path, write_meta_graph=False)
         self.sess = None
         self.is_session_open = False
-        self.save()
 
 
     def dump_trainable_variables(self):
@@ -232,9 +230,19 @@ class OMTFNN:
         self.path = dest
 
 
-    def log_train_step(self):
-        """Log training step."""
+    def append_log(self):
+        """Add log from model run."""
         pass
+
+
+    def name_matches(self, regexp):
+        """Check whether network name matches given regexp.
+        Args:
+            regexp: regexp
+        Returns:
+            True if matches, False if not...
+        """
+        return re.match(regexp, self.name) is not None
 
 
     def get_summary(self):
@@ -242,7 +250,10 @@ class OMTFNN:
         Returns:
             printable summary
         """
-        return "ToDo"
+        r = "Model name: %s\n" % self.name
+        r += "Last accuracy: x\n"
+        r += "Training samples: x\n"
+        return r
 
 
     def __str__(self):

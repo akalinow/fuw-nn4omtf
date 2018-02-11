@@ -11,7 +11,7 @@ import os
 import pickle
 import re
 import shutil
-
+from nn4omtf.network import OMTFNN
 
 __all__ = ['OMTFNNStorage']
 
@@ -33,7 +33,7 @@ class OMTFNNStorage:
         obj_file = os.path.join(self.path, OMTFNNStorage.CONST.DESC_FILE_NAME)
         assert not os.path.exists(obj_file), "Storage already exists!"
         cont = os.path.join(self.path, OMTFNNStorage.CONST.NETS_CONTAINER)
-        shutil.rmtree(cont)
+        shutil.rmtree(cont, ignore_errors=True)
         os.makedirs(cont)
         self.nets = []
 
@@ -68,11 +68,36 @@ class OMTFNNStorage:
         return True
 
 
-    def add_network(self, net):
+    def add_new_network_with_builder_file(self, name, builder_file):
+        """Add new network into storage. Create model using builder file.
+        Args:
+            name: model name
+            builder_file: builder file path
+        """
+        assert name not in self.nets, "Network '{}' already in storage!".format(name)
+        dest = os.path.join(self.path, OMTFNNStorage.CONST.NETS_CONTAINER)
+        net = OMTFNN.create_with_builder_file(name, dest, builder_file)
+        self.nets.append(name)
+
+
+    def add_network(self, name, builder_fn):
+        """Create new network 
+        Args:
+            name: model name
+            builder_fn: builder function
+        """
+        assert name not in self.nets, "Network '{}' already in storage!".format(name)
+        dest = os.path.join(self.path, OMTFNNStorage.CONST.NETS_CONTAINER)
+        OMTFNN.create_with_builder_file(name, dest, builder_file)
+        self.nets.append(name)
+
+
+    def add_existing_network(self, net):
         """Add network to storage.
         Args:
             net: OMTFNN object
         """
+        assert net.name not in self.nets, "Network '{}' already in storage!".format(net.name)
         self.nets.append(net.name)
         dest = os.path.join(self.path, OMTFNNStorage.CONST.NETS_CONTAINER)
         net.move(dest)
@@ -131,7 +156,7 @@ class OMTFNNStorage:
     def get_summary(self):
         """Returns summary string."""
         r = "Storage name: " + self.name
-        r += "\nList of networks:\n"
+        r += "\nNetworks summaries:\n"
         nets = self._load_by_names(self.nets)
         for net in nets:
             r += '\n'

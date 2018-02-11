@@ -110,8 +110,18 @@ class OMTFDataset:
         l = []
         for el in self.sets[name]:
             ptc = el['code']
-            if ptc >= ptc_min and ptc <= ptc_max:
+            if ptc_min is not None and ptc_max is not None:
+                if ptc >= ptc_min and ptc <= ptc_max:
+                    l.append(el['path'])
+            elif ptc_min is not None:
+                if ptc>= ptc_min:
+                    l.append(el['path'])
+            elif ptc_max is not None:
+                if ptc <= ptc_max:
+                    l.append(el['path'])
+            else:
                 l.append(el['path'])
+        l = [os.path.join(self.path, el) for el in l]
         return l, len(l)
 
 

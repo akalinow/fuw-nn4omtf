@@ -20,7 +20,10 @@ class HITS_TYPE:
 
 class NPZ_FIELDS:
     PROD = "prod"
+    PROD_SHAPE = [4]
+    PROD_IDX_PT = 0
     OMTF = "omtf"
+    OMTF_SHAPE = [6]
     HITS_FULL = "hits_full"
     HITS_REDUCED = "hits_reduced"
     PT_CODE = "pt_code"
