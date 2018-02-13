@@ -20,7 +20,8 @@ __all__ = [
         'save_string_as',
         'store_graph',
         'signature_from_dict',
-        'float_feature']
+        'float_feature',
+        'init_uninitialized_variables']
 
 
 def weight_variable(shape, name=None):
@@ -189,3 +190,16 @@ def signature_from_dict(sig_dict):
 def float_feature(value):
     """Creates TensorFlow feature from value."""
     return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+
+def init_uninitialized_variables(sess, initialized):
+    """Helper method to initialize uninitialized variables
+    Args:
+        sess: tf session
+        initialized: list of initialized tensors
+    """
+    all_vars = sess.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    for var in all_vars:
+        if var not in initialized:
+            sess.run(var.initializer)
+

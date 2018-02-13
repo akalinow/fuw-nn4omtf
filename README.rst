@@ -21,3 +21,4 @@ To do
 * creating, saving, restoring model with OMTFNN
 * possibility of dumping model, getting pure varables in bytes or whatever
 * saving runs statistics for tb localy, variables and model should be small enougth to push on repo, dataset could be available on cloud
+* Runner fires a lot of threads and doesn't kill them. This exhausts all resources of local machines!
