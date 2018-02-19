@@ -25,8 +25,11 @@ To do
 * possibility of dumping model, getting pure varables in bytes or whatever
 * test and compare procedure
 * upgrade statistics collection
+* analytics feature (at least for input) - preview of weigths and activation patterns => understanding of learned features
 
 
 --------------
+
 Any questions?  
 Please, send me an email. :)
+
