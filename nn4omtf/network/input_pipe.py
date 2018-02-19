@@ -26,7 +26,7 @@ class OMTFInputPipe:
         placeholder, iterator = setup_input_pipe(
             files_n=files_n,
             name=name,
-            compression_type=self.dataset.write_opt,
+            compression_type=self.dataset.get_compression_type(),
             in_type=hits_type,
             out_class_bins=out_class_bins,
             batch_size=batch_size,

@@ -95,6 +95,14 @@ class OMTFDataset:
         self.params['test_frac'] = 1 - self.params['train_frac'] - self.params['valid_frac']
 
 
+    def get_compression_type(self):
+        """Return compression type string
+        Returns:
+            "" or "GZIP"
+        """
+        return self.write_opt.get_compression_type_string(self.write_opt)
+
+
     def get_dataset(self, name='train', ptc_min=None, ptc_max=None):
         """Get list TFRecords' paths.
         Filter files which doesn't contain events with muons' pT code
@@ -139,13 +147,26 @@ class OMTFDataset:
 
 
     def get_summary(self):
-        summary = "name: %s\n" % self.name
+        summary = "*** OMTF dataset summary ***\n"
+        summary += "Dataset parameters:\n"
+        summary += "name: %s\n" % self.name
         for k, v in self.params.items():
             summary += "{}: {}\n".format(k, v)
         for name, sets in self.sets.items():
-            summary += "\nset: {}\n".format(name)
+            summary += "\nSummary of subset: %s\n" % name
+            summary += "{events:^10}{code:^10}{pt_min:^10}{pt_max:^10}{sign:^6}{path:^20}\n".format(
+                    events="events",
+                    code="code",
+                    pt_min="pt_min",
+                    pt_max="pt_max",
+                    sign="sign",
+                    path="path"
+                    )
+            total = 0
             for el in sets:
-                summary += "> events: {events}, code: {code}, sign: {sign}, pt_min: {pt_min}, pt_max: {pt_max}\npath: {path}\n".format(**el)
+                summary += "{events:<10}{code:<10}{pt_min:<10.1f}{pt_max:<10.1f}{sign:<6}{path:<}\n".format(**el)
+                total += el['events']
+            summary += "total: %d\n" % total
         return summary
 
 

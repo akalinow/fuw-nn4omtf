@@ -260,8 +260,9 @@ class OMTFNN:
             printable summary
         """
         r = "Model name: %s\n" % self.name
-        r += "Last accuracy: x\n"
-        r += "Training samples: x\n"
+        r += "{:^40}{:^15}{:^15}\n".format("Session name", "Step", "Accuracy")
+        for rec in self.log:
+            r += "{:<40}{:<15}{:<15.3}\n".format(rec[2], rec[1], rec[0])
         return r
 
     def __str__(self):
