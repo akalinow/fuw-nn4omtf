@@ -50,7 +50,7 @@ def setup_accuracy(net_out, labels):
     return accuracy
 
 
-def check_accuracy(session, pipe, net_in, labels, summary_op, accuracy_op):
+def check_accuracy(session, pipe, net_in, labels, accuracy_op, summary_op=None):
     """Measure accuracy on whole dataset.
     Args:
         session: tf session
@@ -69,13 +69,15 @@ def check_accuracy(session, pipe, net_in, labels, summary_op, accuracy_op):
         data_in, data_labels = pipe.fetch()
         if data_in is None:
             break
-        print(data_in.shape)
         l = data_in.shape[0]
         cnt += l
         feed_dict = {net_in: data_in, labels: data_labels}
-        summary, acc = session.run([summary_op, accuracy_op],
-            feed_dict=feed_dict)
-        summaries.append(summary)
+        if summary_op is not None:
+            summary, acc = session.run([summary_op, accuracy_op],
+                feed_dict=feed_dict)
+            summaries.append(summary)
+        else:
+            acc = session.run(accuracy_op, feed_dict=feed_dict)
         res += l * acc
 
     return summaries, res / cnt

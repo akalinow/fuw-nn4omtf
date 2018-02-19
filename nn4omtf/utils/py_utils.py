@@ -12,7 +12,12 @@ import os
 import inspect
 
 
-__all__ = ['import_module_from_path', 'get_from_module_by_name', 'get_source_of_obj']
+__all__ = [
+        'import_module_from_path', 
+        'get_from_module_by_name', 
+        'get_source_of_obj',
+        'dict_to_object'
+        ]
 
 
 def import_module_from_path(path):
@@ -40,4 +45,17 @@ def get_source_of_obj(obj):
     """Get source code of compiled Python object."""
     lines = inspect.getsourcelines(obj)
     return "".join(lines[0])
+
+
+def dict_to_object(dictionary):
+    """Prepare object-like dictionary.
+    Args:
+        dictionary: dictionary to convert
+    Returns:
+        object with fields same as dictionary entries
+    """
+    class Dict2Obj:
+        def __init__(self, d):
+            self.__dict__ = d
+    return Dict2Obj(dictionary)
 

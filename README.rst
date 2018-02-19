@@ -26,6 +26,7 @@ To do
 * test and compare procedure
 * upgrade statistics collection
 * analytics feature (at least for input) - preview of weigths and activation patterns => understanding of learned features
+* dry run option - runtime estimation?
 
 
 --------------
