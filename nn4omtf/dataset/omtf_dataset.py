@@ -68,6 +68,7 @@ class OMTFDataset:
 
     def load(path):
         """Load dataset object from disk.
+
         Args:
             path: source path where dataset object is stored
         Returns:

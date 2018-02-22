@@ -28,6 +28,7 @@ To do
 * analytics feature (at least for input) - preview of weigths and activation patterns => understanding of learned features
 * dry run option - runtime estimation?
 
+* InputPipe - fetching additional data, raw production data or even related omtf data
 
 --------------
 
