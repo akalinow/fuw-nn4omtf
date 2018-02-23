@@ -23,6 +23,6 @@ setup(
             'Programming Language :: Python :: 3.6'
             ],
         python_requires='>=3.6',
-        install_requires=['tensorflow==1.4.0', 'numpy', 'matplotlib'], # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
+        install_requires=['tensorflow==1.5.0', 'numpy', 'matplotlib', 'ipython'], # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
         packages=find_packages()
     )
