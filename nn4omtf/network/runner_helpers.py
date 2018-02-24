@@ -2,13 +2,11 @@
 """
     Copyright (C) 2018 Jacek Łysiak
     MIT License
-
+    
+    OMTFRunner static helper methods.
 """
 
 import tensorflow as tf
-
-
-__all__ = ['check_accuracy', 'setup_accuracy', 'setup_trainer']
 
 
 def setup_trainer(net_out, labels, learning_rate=1e-3):
@@ -66,7 +64,7 @@ def check_accuracy(session, pipe, net_in, labels, accuracy_op, summary_op=None):
     cnt = 0
         
     while True:
-        data_in, data_labels = pipe.fetch()
+        data_in, data_labels, _ = pipe.fetch()
         if data_in is None:
             break
         l = data_in.shape[0]

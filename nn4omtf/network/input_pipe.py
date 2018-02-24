@@ -3,18 +3,20 @@
     Copyright (C) 2018 Jacek Łysiak
     MIT License
 
+    Handy input pipe wrapper.
 """
 
 import tensorflow as tf
 from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network.input_pipe_helpers import setup_input_pipe
-
+from nn4omtf.network.input_pipe_const import PIPE_MAPPING_TYPE
 
 class OMTFInputPipe:
     """Utility class which helps with some operation on dataset."""
 
     def __init__(self, dataset, name, hits_type, out_class_bins,
-            batch_size=1, shuffle=False, reps=1):
+            batch_size=1, shuffle=False, reps=1, 
+            mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE):
         """Create input pipe
         Args:
             dataset: OMTFDataset object
@@ -31,7 +33,8 @@ class OMTFInputPipe:
             out_class_bins=out_class_bins,
             batch_size=batch_size,
             shuffle=shuffle,
-            reps=reps)
+            reps=reps,
+            mapping_type=mapping_type)
 
         self.placeholder = placeholder
         self.iterator = iterator
@@ -59,11 +62,11 @@ class OMTFInputPipe:
     def fetch(self):
         """Fetch examples from input pipe.
         Returns:
-            2-touple (input data, labels) or (None, None) if input
-            pipe is empty.
+            3-touple (input data, labels, extra_data_dict) or (None, None, None)
+            if input pipe is empty.
         """
         assert self.session is not None, "Input pipe must be initialized!"
         try:
             return self.session.run(self.next_op)
         except tf.errors.OutOfRangeError:
-            return None, None
+            return None, None, None

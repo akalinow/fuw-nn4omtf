@@ -16,7 +16,7 @@ from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network import OMTFNN
 from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 
-from nn4omtf.network.runner_helpers import *
+from nn4omtf.network.runner_helpers import check_accuracy, setup_accuracy, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
 
 
@@ -187,7 +187,7 @@ class OMTFRunner:
             vp("{start_datetime} - training started".format(**stamp))
             while i <= opt.steps or opt.steps < 0:
                 # Fetch next batch of input data and its labels
-                train_in, train_labels = train_pipe.fetch()
+                train_in, train_labels, _ = train_pipe.fetch()
                 if train_in is None:
                     vp("Train dataset is empty!")
                     break

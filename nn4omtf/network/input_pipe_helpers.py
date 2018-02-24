@@ -2,15 +2,15 @@
 """
     Copyright (C) 2018 Jacek Łysiak
     MIT License
+
+    OMTFInputPipe static helper methods
 """
 import numpy as np
 import time
 import multiprocessing
 import tensorflow as tf
 from nn4omtf.dataset.const import NPZ_FIELDS, HITS_TYPE
-
-__all__ = ['setup_input_pipe']
-
+from nn4omtf.network.input_pipe_const import PIPE_MAPPING_TYPE
 
 def _deserialize(x, hits_type, out_len, bucket_fn):
     """Deserialize hits and convert pt value into categories using
@@ -21,6 +21,7 @@ def _deserialize(x, hits_type, out_len, bucket_fn):
         bucket_fn: float value classifier function
     """
     prod_dim = NPZ_FIELDS.PROD_SHAPE
+    omtf_dim = NPZ_FIELDS.OMTF_SHAPE
     hits = NPZ_FIELDS.HITS_REDUCED
     hits_dim = HITS_TYPE.REDUCED_SHAPE
     if hits_type == HITS_TYPE.FULL:
@@ -29,16 +30,24 @@ def _deserialize(x, hits_type, out_len, bucket_fn):
     features = {
         hits: tf.FixedLenFeature(hits_dim, tf.float32),
         NPZ_FIELDS.PROD: tf.FixedLenFeature(prod_dim, tf.float32),
+        NPZ_FIELDS.OMTF: tf.FixedLenFeature(omtf_dim, tf.float32)
     }
     examples = tf.parse_single_example(x, features)
     prod = examples[NPZ_FIELDS.PROD]
+    omtf = examples[NPZ_FIELDS.OMTF]
     k = tf.py_func(bucket_fn,
                    [prod[NPZ_FIELDS.PROD_IDX_PT]],
                    tf.int64,
                    stateful=False,
                    name='to-one-hot')
     label = tf.one_hot(k, out_len)
-    return examples[hits], label
+
+    # Create extra data dict with production data. 
+    extra = {
+        NPZ_FIELDS.PROD: prod,
+        NPZ_FIELDS.OMTF: omtf
+    }
+    return examples[hits], label, extra
 
 
 def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
@@ -77,8 +86,10 @@ def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
 
 
 def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
-                     batch_size=None, shuffle=False, reps=1):
+                     batch_size=None, shuffle=False, reps=1, 
+                     mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE):
     """Create new input pipeline for given dataset.
+
     Args:
         files_n: # of files in dataset
         name: input pipe name, used in graph scope
@@ -87,6 +98,9 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
         batch_size(optional,default=None): how many records should be read
             in one batch
         shuffle(optional,default=False): suffle examples in batch
+        mapping_type(optional, default=interleave): selects which mapping
+            type should be applied when producing examples dataset from
+            filenames dataset
     Returns:
         2-tuple (filenames placeholder, dataset iterator)
     """
@@ -117,14 +131,24 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
             out_len=out_len,
             bucket_fn=bucket_fn)
 
-        # Now create proper dataset with interleaved samples from each TFRecord
-        # file. `interleave()` maps provided function which gets filename
-        # and reads examples. They can be transformed. Results of map function
-        # are interleaved in result dataset.
-        dataset = files_dataset.interleave(
-            map_func=map_fn,
-            cycle_length=files_n,  # Length of cycle - go through all files
-            block_length=1)       # One example from each input file in one cycle
+        if mapping_type == PIPE_MAPPING_TYPE.INTERLEAVE:
+            # Now create proper dataset with interleaved samples from each TFRecord
+            # file. `interleave()` maps provided function which gets filename
+            # and reads examples. They can be transformed. Results of map function
+            # are interleaved in result dataset.
+            # 
+            # I recommend read the docs for more information:
+            # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#interleave
+            dataset = files_dataset.interleave(
+                map_func=map_fn,
+                cycle_length=files_n,  # Length of cycle - go through all files
+                block_length=1)       # One example from each input file in one cycle
+
+        elif mapping_type == PIPE_MAPPING_TYPE.FLAT_MAP:
+            dataset = files_dataset.flat_map(map_func=map_fn)
+
+        else:
+            raise ValueError("mapping_type param in not one of PIPE_MAPPING_TYPE constants.")
 
         # How many times whole dataset will be read.
         dataset = dataset.repeat(count=reps)

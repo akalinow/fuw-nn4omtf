@@ -25,9 +25,6 @@ import numpy as np
 from nn4omtf.dataset.const import NPZ_FIELDS
 
 
-__all__ = ['root_to_numpy', 'load_root_dict']
-
-
 def load_root_dict(path):
     """Loads ROOT's 'omtfPatternMaker/OMTFHitsTree' dictionary file.
     This method assumes that files and directory structure comes from @akalinow 
