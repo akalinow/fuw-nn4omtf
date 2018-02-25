@@ -155,8 +155,6 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
 
         if batch_size is not None:
             # How big one batch will be...
-            # @jlysiak: I observed that reading batch of size 1-1000 takes almost
-            #     constant time
             dataset = dataset.batch(batch_size=batch_size)
             if shuffle:
                 # Data will be read into the buffer and here we can suffle
