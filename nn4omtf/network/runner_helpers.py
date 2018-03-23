@@ -14,8 +14,8 @@ def setup_trainer(net_pt_out, net_sgn_out, labels_pt,
     """Setup model trainer.
     @NOTE 23.03.18: added required sgn trainer
     Args:
-        net_pt_out: pt classes (1-hot) model output
-        net_sng_out: charge sign model output
+        net_pt_out: pt classes (logits) model output -> [p0,..,pk,..,pN]
+        net_sng_out: charge sign model output, 1-D vector -> [-, +]
         labels_pt: pt labels to compare with
         labels_sgn: charge sign labels
         learning_rate: just learning rate
@@ -24,15 +24,11 @@ def setup_trainer(net_pt_out, net_sgn_out, labels_pt,
     """
     with tf.name_scope('trainer'):
         with tf.name_scope('loss'):
-            # As is stated here [https://www.tensorflow.org/api_docs/python
-            # /tf/nn/sparse_softmax_cross_entropy_with_logits]
-            # when labels doesn't represent 'soft' class (only one single 
-            # true class is provided) this sparse cross entropy should be used
-            pt_cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            pt_cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
                 labels=labels_pt, logits=net_pt_out)
             pt_cross_entropy = tf.reduce_mean(pt_cross_entropy)
             
-            sgn_cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            sgn_cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
                 labels=labels_sgn, logits=net_sgn_out)
             sgn_cross_entropy = tf.reduce_mean(sgn_cross_entropy)
         
@@ -59,12 +55,14 @@ def setup_accuracy(net_pt_out, net_sgn_out, pt_labels, sgn_labels):
         Accuracy nodes
     """
     with tf.name_scope('accuracy'):
+        net_pt_class_out = tf.argmax(net_pt_out, 1)
         pt_correct_prediction = tf.equal(
-                tf.argmax(net_pt_out, 1), 
+                net_pt_class_out, 
                 tf.argmax(pt_labels, 1))
 
+        net_sng_class_out = tf.argmax(net_sgn_out, 1)
         sgn_correct_prediction = tf.equal(
-                tf.argmax(net_sgn_out, 1), 
+                net_sgn_class_out, 
                 tf.argmax(sgn_labels, 1))
 
         pt_correct_prediction = tf.cast(pt_correct_prediction, tf.float32)
@@ -74,38 +72,82 @@ def setup_accuracy(net_pt_out, net_sgn_out, pt_labels, sgn_labels):
         sgn_accuracy = tf.reduce_mean(sgn_correct_prediction)
         tf.summary.scalar('pt_accuracy', pt_accuracy)
         tf.summary.scalar('sgn_accuracy', sgn_accuracy)
-    return pt_accuracy, sgn_accuracy
+    return pt_accuracy, sgn_accuracy, net_pt_class_out, net_pt_class_out
 
 
-def check_accuracy(session, pipe, net_in, labels, accuracy_op, summary_op=None):
-    """Measure accuracy on whole dataset.
+def collect_statistics(
+        sess,           # Session
+        sess_name,
+        pipe,           # Feed input pipe
+        net_in,         # Network input
+        net_pt_out,     # Network pt output (logits)
+        net_sgn_out,    # Network sgn output (logits) 
+        net_pt_class,   # Network pt output argmax (int)
+        net_sgn_class,  # Network sgn output argmax (int)
+        pt_acc,         # pt accyracy node
+        sgn_acc,        # sign accuracy node
+        pt_labels,      # labels placeholder
+        sgn_labels,
+        summary_op):
+    """Statistics collector
+    Run network and put data into OMTFStatistics object.
     Args:
-        session: tf session
-        pipe: OMTFInputPipe object
-        net_in: model input placeholder
-        labels: labels placeholder
-        summary_op: summary operation node
-        accuracy_op: accuracy operation node
+        sess: TF session
+        sess_name: session name
+        pipe: Feed input pipe
+        net_in: Network input
+        net_pt_out: Network pt output (logits)
+        net_sgn_out: Network sgn output (logits) 
+        net_pt_class: Network pt output argmax (int)
+        net_sgn_class: Network sgn output argmax (int)
+        pt_acc: pt accyracy node
+        sgn_acc: sign accuracy node
+        pt_labels: pt labels placeholder
+        sgn_labels: charge sign labels placeholder
+        summary_op: summary tensor
+
+    Returns:
+        tuple of:
+            - list of summaries
+            - accuracy (float)
+            - OMTFStatistics object
     """
-    pipe.initialize(session)
+    pipe.initialize(sess)
     summaries = []
-    res = .0
+    pt_res = .0
     cnt = 0
-        
+    stats = OMTFStatistics(sess_name)
+
     while True:
-        data_in, data_labels, _ = pipe.fetch()
-        if data_in is None:
+        # Get extra data and put into statistics
+        data_in, data_labels, extra = pipe.fetch()
+        if train_in is None:
+            vp("Train dataset is empty!")
             break
+
+        # Prepare feed dict
+        feed_dict = {
+                net_in: data_in,
+                pt_labels: data_labels[PIPE_OUT_DATA.TRAIN_PROD_PT],
+                sgn_labels: data_labels[PIPE_OUT_DATA.TRAIN_PROD_SGN]
+        }
+        run_in = [
+                summary_op,
+                pt_acc,
+                sgn_acc,
+                net_pt_class,
+                net_sgn_class
+        ]
+        run_out = session.run(run_in, feed_dict=feed_dict)
+        print("DEBUG:", run_out)
+        summaries.append(run_out[0])
+        stats.append(run_out[1:])
+
         l = data_in.shape[0]
         cnt += l
-        feed_dict = {net_in: data_in, labels: data_labels}
-        if summary_op is not None:
-            summary, acc = session.run([summary_op, accuracy_op],
-                feed_dict=feed_dict)
-            summaries.append(summary)
-        else:
-            acc = session.run(accuracy_op, feed_dict=feed_dict)
-        res += l * acc
+        pt_res += l * run_out[1]
+        sgn_res += l * run_out[2]
 
-    return summaries, res / cnt
+    return summaries, pt_res / cnt, sgn_res / cnt, stats
+    
 

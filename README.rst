@@ -19,18 +19,21 @@ Package contains:
 * `OMTFInputPipe` - creates customized pipe from provided dataset, helps with model feeding
 * some utils - please, see `root_utils` and `utils` directory
 
+
 Data available from OMTFInputPipe:
-- hits array (full / reduced)
-- production data:
-  - pt label
-  - sign label
-  - pt original value
-  - pt code
-  - pt class
-- OMTF data:
-  - pt label
-  - sign label
-  - pt value
+
+* hits array (full / reduced)
+* production data:
+  * pt label
+  * sign label
+  * pt original value
+  * pt code
+  * pt class
+
+* OMTF data:
+  * pt label
+  * sign label
+  * pt value
 
 --------------
 

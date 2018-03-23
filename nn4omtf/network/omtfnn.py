@@ -17,7 +17,6 @@ import re
 import nn4omtf.utils as utils
 from nn4omtf.dataset.const import HITS_TYPE
 
-__all__ = ['OMTFNN']
 
 
 class OMTFNN:
@@ -32,9 +31,11 @@ class OMTFNN:
         GRAPH_SCOPE = 'omtfnn'
         MODEL_SIGNATURE = tf.saved_model.signature_constants.CLASSIFY_METHOD_NAME
         IN_NAME = "IN"
-        OUT_NAME = "OUT"
+        OUT_PT_NAME = "PT_OUT"
+        OUT_SGN_NAME = "SGN_OUT"
         MODEL_DIR = "model"
         RUNLOG_DIR = "logs"
+        STATISTICS_DIR = "statistics"
 
     def __init__(self, name, path, builder_fn):
         """Create network object.
@@ -87,7 +88,7 @@ class OMTFNN:
             path: destination directory
             builder_file: file contains model builder function
         Returns:
-            Network object
+            etwork object
         """
         mod = utils.import_module_from_path(path=builder_file)
         fn = utils.get_from_module_by_name(
@@ -111,6 +112,7 @@ class OMTFNN:
         obj._update(path)
         return obj
 
+
     def save(self):
         """Save model object."""
         self.sess = None
@@ -119,24 +121,76 @@ class OMTFNN:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
-    def _check_builder_results(x, y, pt_class, intype):
+
+    def add_statistics(self, stats):
+        """Add OMTFStatistcs object to model directory tree.
+        Args:
+            stats: OMTFStatistics instance
+        """
+        path = os.path.join(self.path, 
+                OMTFNN.CONST.STATISTICS_DIR, stats.sess_name)
+        os.makedirs(path, exist_ok=True)
+        idx = len(os.listdir(path)
+        filename = os.path.join(path, str(idx))
+        with open(filename, 'wb') as f:
+            pickle.dump(stats, f)
+
+
+    def list_statistics(self):
+        """Get list of available statistics
+        Returns:
+            list of tuples (sess name, # of stats)
+        """
+        path = os.path.join(self.path, 
+                OMTFNN.CONST.STATISTICS_DIR) 
+        files = os.listdir(path)
+        count = []
+        for f in files:
+            stats = os.listdir(os.path.join(path, f))
+            count.append(len(stats))
+        return zip(files, count)
+
+
+    def get_statistics(self, sess_name, idx):
+        """Load statistics object.
+        Args:
+            sess_name: session name
+            idx: statistics idx
+        """
+        filename = os.path.join(self.path, 
+                OMTFNN.CONST.STATISTICS_DIR, sess_name, str(idx))
+        with open(filename, 'rb') as f:
+            obj = pickle.load(f)
+        return obj
+
+
+    def _check_builder_results(x, y_pt, y_sgn, pt_class, intype):
         """Perform small sanity check on results of user defined builder.
         Args:
-            x: input tensor which shape agrees with provided input type
-            y: output tensor which shape agrees with provided pt class list length
+            x: input tensor (hits data) which shape agrees with 
+                provided input type
+            y_pt: output tensor (pt classes logits) which shape agrees 
+                with provided pt class list length
+            y_sgn: output tensor (charge sign logits) of shape [None, 2] 
             pt_class: pt classes bins edges
             intype: input type of OMTFDataset format
         """
         assert isinstance(x, tf.Tensor), "Input is not a tf.Tensor!"
-        assert isinstance(y, tf.Tensor), "Output is not a tf.Tensor!"
-        assert intype == HITS_TYPE.FULL or intype == HITS_TYPE.REDUCED, "Input type is not one of {} | {}".format(
-            HITS_TYPE.REDUCED, HITS_TYPE.FULL)
+        assert isinstance(y_pt, tf.Tensor), "pt output is not a tf.Tensor!"
+        assert isinstance(y_sgn, tf.Tensor), "sgn output is not a tf.Tensor!"
+        assert intype == HITS_TYPE.FULL 
+                or intype == HITS_TYPE.REDUCED, 
+                "Input type is not one of {} | {}".format(
+                HITS_TYPE.REDUCED, HITS_TYPE.FULL)
         xs_req = HITS_TYPE.FULL_SHAPE if intype == HITS_TYPE.FULL else HITS_TYPE.REDUCED_SHAPE
         xs_req.insert(0, None)
         in_fmt = tf.TensorShape(xs_req)
-        out_fmt = tf.TensorShape([None, len(pt_class) + 1])
+        out_pt_fmt = tf.TensorShape([None, len(pt_class) + 1])
+        out_sgn_fmt = tf.TensorShape([None, 2])
         x.shape.assert_is_compatible_with(in_fmt)
-        y.shape.assert_is_compatible_with(out_fmt)
+        y_pt.shape.assert_is_compatible_with(out_pt_fmt)
+        y_sgn.shape.assert_is_compatible_with(out_sgn_fmt)
+
 
     def _create_graph(path, builder_fn):
         """Create graph using builder function and store on disk.
@@ -148,12 +202,15 @@ class OMTFNN:
         """
         with tf.Graph().as_default() as g:
             with tf.name_scope(OMTFNN.CONST.GRAPH_SCOPE):
-                x, y, pt_class, intype = builder_fn()
-                OMTFNN._check_builder_results(x, y, pt_class, intype)
-
+                x, y_pt, y_sgn, pt_class, intype = builder_fn()
+                OMTFNN._check_builder_results(x, y_pt, y_sgn, pt_class, intype)
                 inputs = {OMTFNN.CONST.IN_NAME: x}
-                y_out = tf.identity(y, name=OMTFNN.CONST.OUT_NAME)
-                outputs = {OMTFNN.CONST.OUT_NAME: y_out}
+                y_pt_out = tf.identity(y_pt, name=OMTFNN.CONST.OUT_PT_NAME)
+                y_sgn_out = tf.identity(y_sgn, name=OMTFNN.CONST.OUT_SGN_NAME)
+                outputs = {
+                    OMTFNN.CONST.OUT_PT_NAME: y_pt_out,
+                    OMTFNN.CONST.OUT_SGN_NAME: y_sgn_out
+                }
 
             signature_inputs = utils.signature_from_dict(inputs)
             signature_outputs = utils.signature_from_dict(outputs)
@@ -168,6 +225,7 @@ class OMTFNN:
             model_dir=path)
         return g.as_graph_def(), signature_def_map, pt_class, intype
 
+
     def is_valid_object(path):
         """Static method to check whether given directory contains valid neural network object.
         Args:
@@ -181,26 +239,37 @@ class OMTFNN:
             return False
         return True
 
+
     def restore(self, sess, sess_name):
         """Restore model into TF session.
         Args:
             sess: tensorflow session
             sess_name: session name
+        Returns:
+            tuple of:
+                - graph metadata
+                - input tensor
+                - output tensor of pt logits
+                - output tensor of charge sign logits
         """
         self.is_session_open = True
         self.sess = sess
         log_dir = os.path.join(self.path, OMTFNN.CONST.RUNLOG_DIR, sess_name)
         self.summary_writer = tf.summary.FileWriter(log_dir)
-        path = os.path.join(self.path, OMTFNN.CONST.MODEL_DIR)
+        export_path = os.path.join(self.path, OMTFNN.CONST.MODEL_DIR)
         meta = tf.saved_model.loader.load(sess=sess, tags=[], 
-                export_dir=path)
+                export_dir=export_path)
         t_in_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].inputs[OMTFNN.CONST.IN_NAME]
-        t_out_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[OMTFNN.CONST.OUT_NAME]
+        t_pt_out_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[OMTFNN.CONST.OUT_PT_NAME]
+        t_sgn_out_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[OMTFNN.CONST.OUT_SGN_NAME]
         t_in = tf.saved_model.utils.get_tensor_from_tensor_info(
             t_in_info, sess.graph)
-        t_out = tf.saved_model.utils.get_tensor_from_tensor_info(
-            t_out_info, sess.graph)
-        return meta, t_in, t_out
+        t_pt_out = tf.saved_model.utils.get_tensor_from_tensor_info(
+            t_pt_out_info, sess.graph)
+        t_sgn_out = tf.saved_model.utils.get_tensor_from_tensor_info(
+            t_sgn_out_info, sess.graph)
+        return meta, t_in, t_pt_out, t_sgn_out
+
 
     def finish(self):
         """Finish model usage and save variables and object"""

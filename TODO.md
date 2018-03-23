@@ -22,16 +22,18 @@
   * offline - by dumping data into file?
     * create tools for dump analiytics
     * histograms ---^ analitycs
+
+
 * neuron activation analitycs
+
 * tools for remembering venv paths and activating?
   * env autosetup??
+ 
 * data quantization -> FPGA
   * in case of having good network and implementing it on fpga, it probably would be good idea to
     quantize states but... it's hard??
-* default compression flag in omtfdatasettool = TRUE
-* change depiricated sotfmax
+
 * passing parameters in omtfrunner
-  * [DONE] learning rate
   * changing optimizer
   * changing pipeline 
     * interleave

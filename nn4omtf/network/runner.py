@@ -85,6 +85,7 @@ class OMTFRunner:
         vp = lambda s: print("OMTFRunner: " + s) if self.params['verbose'] else None
         return vp
 
+
     def _update_params(self, params_dict):
         """Update runner parameters
         Args:
@@ -183,7 +184,7 @@ class OMTFRunner:
 
             pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
                                     name="pt_labels")
-            sgn_labels = tf.placeholder(tf.int8, shape=[None, 1],
+            sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
                                     name="sgn_labels")
             
             pt_train_op, sgn_train_op = setup_trainer(
@@ -193,7 +194,7 @@ class OMTFRunner:
                     labels_sgn=sgn_labels,
                     learning_rate=opt.learning_rate)
 
-            pt_accuracy_op, sgn_accuracy_op = setup_accuracy(
+            pt_acc_op, sgn_acc_op, pt_class_op, sgn_class_op = setup_accuracy(
                     net_pt_out=net_pt_out,
                     net_sgn_out=net_sgn_out,
                     pt_labels=pt_labels,
@@ -267,6 +268,20 @@ class OMTFRunner:
 #                            labels=labels,
 #                            summary_op=summary_op,
 #                            accuracy_op=accuracy_op)
+                    summaries, accuracy, nn_stats = collect_statistics(
+                            sess=sess,
+                            sess_name=opt.sess_name,
+                            pipe=valid_pipe,            # test using valid set
+                            net_in=net_in,              # net input tensor
+                            net_pt_out=net_pt_out,      # pt logits out
+                            net_sgn_out=net_sgn_out,    # sgn logits out
+                            net_pt_class=pt_class_op,   # pt class out
+                            net_sgn_class=sgn_class_op, # sgn class out
+                            pt_labels=pt_labels,        # labels placeholder
+                            sgn_labels=sgn_labels
+                            summary_op=summary_op)      # summary operator
+                    
+                    nn_stats.set_bins(opt.out_class_bins)
 
                     if opt.logdir is not None:
                         for s in summaries:
@@ -274,6 +289,7 @@ class OMTFRunner:
                     
                     self.network.add_summaries(summaries, i)
                     self.network.add_log(accuracy, i, opt.sess_name)
+                    self.network.add_statistics(nn_stats)
                     
                     stamp = self._next_tick()
                     vp("Validation @ step {step}".format(step=i))
@@ -318,27 +334,54 @@ class OMTFRunner:
                     batch_size=opt.valid_batch_size,
                     out_class_bins=opt.out_class_bins)
 
+        self.show_params()
+
         with tf.Session() as sess:
-            _, net_in, net_out = self.network.restore(
+            _, net_in, net_pt_out, net_sgn_out = self.network.restore(
                     sess=sess, sess_name=opt.sess_name)
+
             vp("Loaded model: %s" % self.network.name)
-            labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
-                                    name="labels")
-            accuracy_op = setup_accuracy(net_out, labels)
+            pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
+                                    name="pt_labels")
+
+            sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
+                                    name="sgn_labels")
+            
+            pt_acc_op, sgn_acc_op, pt_class_op, sgn_class_op = setup_accuracy(
+                    net_pt_out=net_pt_out,
+                    net_sgn_out=net_sgn_out,
+                    pt_labels=pt_labels,
+                    sgn_labels=sgn_labels)
              
+            summary_op = tf.summary.merge_all()
+            
             stamp = self._start_clock()
             vp("{start_datetime} - test started!".format(**stamp))
-            _, accuracy = check_accuracy(
-                    session=sess,
-                    pipe=test_pipe,
-                    net_in=net_in,
-                    labels=labels,
-                    accuracy_op=accuracy_op)
+
+            summaries, accuracy, nn_stats = collect_statistics(
+                    sess=sess,
+                    sess_name=opt.sess_name,
+                    pipe=test_pipe,             # test using valid set
+                    net_in=net_in,              # net input tensor
+                    net_pt_out=net_pt_out,      # pt logits out
+                    net_sgn_out=net_sgn_out,    # sgn logits out
+                    net_pt_class=pt_class_op,   # pt class out
+                    net_sgn_class=sgn_class_op, # sgn class out
+                    pt_labels=pt_labels,        # labels placeholder
+                    sgn_labels=sgn_labels
+                    summary_op=summary_op)      # summary operator
+
+            nn_stats.set_bins(opt.out_class_bins)
+
             self.network.add_log(accuracy, 1, opt.sess_name)
+            self.network.add_statistics(nn_stats)
+
             stamp = self._next_tick()
+
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
             vp("Accuracy: %f" % accuracy)
+
         res = {
             'sess_name': opt.sess_name,
             'accuracy': accuracy,
