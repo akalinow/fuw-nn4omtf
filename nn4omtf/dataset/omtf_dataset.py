@@ -9,6 +9,7 @@ import time
 import os
 import pickle
 import tensorflow as tf
+import numpy as np
 from nn4omtf.utils import load_dict_from_npz, float_feature
 from nn4omtf.dataset.const import NPZ_FIELDS
 
@@ -101,7 +102,10 @@ class OMTFDataset:
         Returns:
             "" or "GZIP"
         """
-        return self.write_opt.get_compression_type_string(self.write_opt)
+        if self.write_opt is None:
+            return ""
+        else:
+            return self.write_opt.get_compression_type_string(self.write_opt)
 
 
     def get_dataset(self, name='train', ptc_min=None, ptc_max=None):
@@ -196,12 +200,15 @@ class OMTFDataset:
         name = data[NPZ_FIELDS.NAME]
         code = data[NPZ_FIELDS.PT_CODE]
         sign = data[NPZ_FIELDS.SIGN]
+        ev_all = data[NPZ_FIELDS.EV_N]
+        data[NPZ_FIELDS.PT_CODE] = np.ones(ev_all) * code
         to_save_list = [NPZ_FIELDS.HITS_FULL, 
                         NPZ_FIELDS.HITS_REDUCED, 
                         NPZ_FIELDS.OMTF,
-                        NPZ_FIELDS.PROD]
+                        NPZ_FIELDS.PROD,
+                        NPZ_FIELDS.PT_CODE]
         data_to_save = dict([(k, data[k]) for k in to_save_list])
-        ev_all = data[NPZ_FIELDS.EV_N]
+        print(data_to_save)
         ev_save = int(self.params['events_frac'] * ev_all)
         if verbose:
             print("Events in file: %d" % ev_all)

@@ -18,6 +18,7 @@ from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 
 from nn4omtf.network.runner_helpers import check_accuracy, setup_accuracy, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
+from nn4omtf.network.input_pipe_const import PIPE_OUT_DATA
 
 
 class OMTFRunner:
@@ -31,16 +32,17 @@ class OMTFRunner:
     """
 
     DEFAULT_PARAMS = {
-        "valid_batch_size": 1000000,
+        "valid_batch_size": 10000,
         "batch_size": 1000,
         "sess_prefix": "",
         "shuffle": False,
         "acc_ival": 100,
         "get_meta_ival": 500,
-        "reps": 1,
+        "epochs": 1,
         "steps": -1,
         "logdir": None,
-        "verbose": False
+        "verbose": False,
+        "learning_rate": 0.001
     }
 
     def __init__(self, dataset, network, **kw):
@@ -129,6 +131,13 @@ class OMTFRunner:
         return res
 
 
+    def show_params(self):
+        print("==== OMTFRunner configuration")
+        for k, v in self.params.items():
+            print(">{:20s}:{}".format(k, v))
+        print("=============================")
+
+
     def train(self, **kw):
         """Run model training.
         Training logs are saved on disk if `logs` flag is set.
@@ -161,17 +170,38 @@ class OMTFRunner:
                     hits_type=opt.in_type,
                     batch_size=opt.valid_batch_size,
                     out_class_bins=opt.out_class_bins)
+        
+        self.show_params()
 
         with tf.Session() as sess:
-            _, net_in, net_out = self.network.restore(
+            _, net_in, net_pt_out, net_sgn_out = self.network.restore(
                     sess=sess, sess_name=opt.sess_name)
+
+            # Get collection of initialized variables
             init = sess.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
             vp("Loaded model: %s" % self.network.name)
-            labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
-                                    name="labels")
-            train_op = setup_trainer(net_out, labels)
-            accuracy_op = setup_accuracy(net_out, labels)
+
+            pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
+                                    name="pt_labels")
+            sgn_labels = tf.placeholder(tf.int8, shape=[None, 1],
+                                    name="sgn_labels")
+            
+            pt_train_op, sgn_train_op = setup_trainer(
+                    net_pt_out=net_pt_out,
+                    net_sgn_out=net_sgn_out,
+                    labels_pt=pt_labels,
+                    labels_sgn=sgn_labels,
+                    learning_rate=opt.learning_rate)
+
+            pt_accuracy_op, sgn_accuracy_op = setup_accuracy(
+                    net_pt_out=net_pt_out,
+                    net_sgn_out=net_sgn_out,
+                    pt_labels=pt_labels,
+                    sgn_labels=sgn_labels)
+
             summary_op = tf.summary.merge_all()
+
+            # At after all, initialize new nodes
             init_uninitialized_variables(sess, initialized=init)
             train_pipe.initialize(sess)
 
@@ -187,23 +217,37 @@ class OMTFRunner:
             vp("{start_datetime} - training started".format(**stamp))
             while i <= opt.steps or opt.steps < 0:
                 # Fetch next batch of input data and its labels
+                # Ignore extra data during trainings 
                 train_in, train_labels, _ = train_pipe.fetch()
                 if train_in is None:
                     vp("Train dataset is empty!")
                     break
-                # Prepare training feed and run extra options
-                train_feed_dict = {net_in: train_in, labels: train_labels}
+
+                # Prepare training feed dict
+                train_feed_dict = {
+                        net_in: train_in,
+                        pt_labels: train_labels[PIPE_OUT_DATA.TRAIN_PROD_PT],
+                        sgn_labels: train_labels[PIPE_OUT_DATA.TRAIN_PROD_SGN]
+                }
+
+                # Configure extra options
                 args = {
                     'feed_dict': train_feed_dict,
                     'options': None,
                     'run_metadata': None
                 }
+    
                 if opt.get_meta_ival is not None:
                     if i % opt.get_meta_ival == 0:
                         args['options'] = tf.RunOptions(
                             trace_level=tf.RunOptions.FULL_TRACE)
                         args['run_metadata'] = tf.RunMetadata()
-                summary, _ = sess.run([summary_op, train_op], **args)
+                
+                # Do mini-batch iteration
+                summary, _ = sess.run(
+                        [summary_op, pt_train_op, sgn_train_op], 
+                        **args)
+                
                 # Save training logs for TensorBoard
                 if opt.logdir is not None:
                     train_summary_writer.add_summary(summary, i)
@@ -213,24 +257,33 @@ class OMTFRunner:
 
                 self._next_tick()
                 if i % opt.acc_ival == 0:
-                    summaries, accuracy = check_accuracy(
-                            session=sess,
-                            pipe=valid_pipe,
-                            net_in=net_in,
-                            labels=labels,
-                            summary_op=summary_op,
-                            accuracy_op=accuracy_op)
+                    # TODO Accuracy measurement will be changed to
+                    # general statistics collection in special object
+                    # which could be saved and analyzed offline 
+#                    summaries, accuracy = check_accuracy(
+#                            session=sess,
+#                            pipe=valid_pipe,
+#                            net_in=net_in,
+#                            labels=labels,
+#                            summary_op=summary_op,
+#                            accuracy_op=accuracy_op)
+
                     if opt.logdir is not None:
                         for s in summaries:
                             valid_summary_writer.add_summary(s, i)
+                    
                     self.network.add_summaries(summaries, i)
                     self.network.add_log(accuracy, i, opt.sess_name)
+                    
                     stamp = self._next_tick()
                     vp("Validation @ step {step}".format(step=i))
                     vp("Now: {datetime}, elapsed: {elapsed:.1f} sec.".format(**stamp))
                     vp("Validation run took: {last:.1f} sec.".format(**stamp))
                     vp("Accuracy: %f" % accuracy)
+
                 i += 1
+
+            # End of main while loop, training finished
             stamp = self._next_tick()
             vp("{datetime} - training finished!".format(**stamp))
             vp("Training took: {elapsed:.1f} sec,".format(**stamp))

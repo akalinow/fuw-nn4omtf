@@ -21,8 +21,9 @@ setup(
         classifiers=[
             'Development Status :: 2 - Pre-Alpha',
             'Programming Language :: Python :: 3.6'
+            'Programming Language :: Python :: 3.5'
             ],
-        python_requires='>=3.6',
-        install_requires=['tensorflow==1.5.0', 'numpy', 'matplotlib', 'ipython'], # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
+        python_requires='>=3.5',
+        install_requires=['tensorflow>=1.6.0', 'numpy', 'matplotlib', 'ipython'], # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
         packages=find_packages()
     )

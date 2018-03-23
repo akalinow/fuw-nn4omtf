@@ -10,48 +10,129 @@ import time
 import multiprocessing
 import tensorflow as tf
 from nn4omtf.dataset.const import NPZ_FIELDS, HITS_TYPE
-from nn4omtf.network.input_pipe_const import PIPE_MAPPING_TYPE
+from nn4omtf.network.input_pipe_const import PIPE_MAPPING_TYPE, PIPE_OUT_DATA
 
-def _deserialize(x, hits_type, out_len, bucket_fn):
+
+    
+
+def _deserialize(x, hits_type, out_len, out_class_bins):
     """Deserialize hits and convert pt value into categories using
     with one-hot encoding.
+
+    NOTICE: data returned from OMTF algorithm is a bit wired.
+    In case of mismatch we get charge=-2 and pt = -999.0.
+    If we want to compare OMTF with NN, digitizing of OMTF data is
+    performed with additional bins. Resulting value is shifted to match
+    NN ranges. There are some other problem with compating bins only
+    but this case is the most frequent.
+    Comparison of NN and OMTF can be done only by comparing bucket due to
+    NN is simple clasifier.
+
     Args:
         hits_type: hits type const from `HITS_TYPE`
         out_len: output one-hot tensor length
         bucket_fn: float value classifier function
+    
+    Returns:
+        data on single event which is 3-tuple containing:
+            - selected hits array (HITS_REDUCED | HITS_FULL)
+            - dict of labels for: 
+                - production pt (1-hot encoded)
+                - production charge sign (0 negative, 1 positive)
+            - dict with extra data:
+                - exact value of pt
+                - used pt code
+                - omtf recognized pt (1-hot)
+                - omtf recognized sign 
+                    (because this value may be equal -2... read bucket
+                    function description)
     """
     prod_dim = NPZ_FIELDS.PROD_SHAPE
     omtf_dim = NPZ_FIELDS.OMTF_SHAPE
+
     hits = NPZ_FIELDS.HITS_REDUCED
     hits_dim = HITS_TYPE.REDUCED_SHAPE
     if hits_type == HITS_TYPE.FULL:
         hits = NPZ_FIELDS.HITS_FULL
         hits_dim = HITS_TYPE.FULL_SHAPE
+
+    # Define features to read & deserialize from TFRecords dataset 
     features = {
         hits: tf.FixedLenFeature(hits_dim, tf.float32),
         NPZ_FIELDS.PROD: tf.FixedLenFeature(prod_dim, tf.float32),
-        NPZ_FIELDS.OMTF: tf.FixedLenFeature(omtf_dim, tf.float32)
+        NPZ_FIELDS.OMTF: tf.FixedLenFeature(omtf_dim, tf.float32),
+        NPZ_FIELDS.PT_CODE: tf.FixedLenFeature([1], tf.float32)
     }
     examples = tf.parse_single_example(x, features)
-    prod = examples[NPZ_FIELDS.PROD]
-    omtf = examples[NPZ_FIELDS.OMTF]
-    k = tf.py_func(bucket_fn,
-                   [prod[NPZ_FIELDS.PROD_IDX_PT]],
+
+    hits_arr = examples[hits]
+    prod_arr = examples[NPZ_FIELDS.PROD]
+    omtf_arr = examples[NPZ_FIELDS.OMTF]
+    pt_code = examples[NPZ_FIELDS.PT_CODE]
+    # ==== Prepare customized no-param bucketizing functions
+    prod_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins)
+    # Bucketize sign: 0 -> -, 1 -> +
+    prod_sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[0])
+
+    omtf_bins = out_class_bins.copy()
+    omtf_bins.insert(0, 0)
+    omtf_bucket_fn = lambda x: (np.digitize(x=x, bins=omtf_bins) - 1)
+    
+    # Bucketizing function for OMTF charge sign parameter.
+    # Given bins may seems to be very strange, but...
+    # OMTF algo. in case of mismatch gives charge about -2.00...
+    # Off by one to match production label.
+    omtf_sgn_bucket_fn = lambda x: (np.digitize(x=x, bins=[-1.5, 0]) - 1)
+
+    # ======= TRAINING DATA
+    # Prepare production pt labels
+    prod_pt_k = tf.py_func(prod_bucket_fn,
+                   [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
                    tf.int64,
                    stateful=False,
-                   name='to-one-hot')
-    label = tf.one_hot(k, out_len)
+                   name='digitize_prod_pt')
+    prod_pt_label = tf.one_hot(prod_pt_k, out_len)
+    # Encode signs
+    prod_sign_label = tf.py_func(prod_sgn_bucket_fn,
+                    [prod_arr[NPZ_FIELDS.PROD_IDX_SIGN]],
+                    tf.int64,
+                    stateful=False,
+                    name='muon_sgn_code')
+    
+    train_labels = {
+            PIPE_OUT_DATA.TRAIN_PROD_PT: prod_pt_label,
+            PIPE_OUT_DATA.TRAIN_PROD_SGN: prod_sign_label
+    }
+    # ======= END OF TRAINING DATA
+    
+    # ======= ADDITIONAL DATA
+    omtf_sign_k = tf.py_func(omtf_sgn_bucket_fn,
+                    [omtf_arr[NPZ_FIELDS.OMTF_IDX_SIGN]],
+                    tf.int64,
+                    stateful=False,
+                    name='omtf_sgn_code')
+
+    # Encode omtf pt guessed values 
+    omtf_pt_k = tf.py_func(omtf_bucket_fn,
+                   [omtf_arr[NPZ_FIELDS.OMTF_IDX_PT]],
+                   tf.int64,
+                   stateful=False,
+                   name='digitize_omtf_pt')
 
     # Create extra data dict with production data. 
     extra = {
-        NPZ_FIELDS.PROD: prod,
-        NPZ_FIELDS.OMTF: omtf
+        PIPE_OUT_DATA.EXTRA_OMTF_PT_CLASS: omtf_pt_k,
+        PIPE_OUT_DATA.EXTRA_OMTF_PT_VAL: omtf_arr[NPZ_FIELDS.OMTF_IDX_PT],
+        PIPE_OUT_DATA.EXTRA_OMTF_SGN_CLASS: omtf_sign_k,
+        PIPE_OUT_DATA.EXTRA_PROD_PT_CODE: pt_code,
+        PIPE_OUT_DATA.EXTRA_PROD_PT_VAL: prod_arr[NPZ_FIELDS.PROD_IDX_PT],
+        PIPE_OUT_DATA.EXTRA_PROD_PT_CLASS: prod_pt_k
     }
-    return examples[hits], label, extra
+    return examples[hits], train_labels, extra
 
 
 def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
-                          out_len, bucket_fn):
+                          out_len, out_class_bins):
     """Creates new TFRecordsDataset as a result of map function.
     It's interleaved in #setup_input_pipe method as a base of lambda.
     Interleave takes filename tensor from filenames dataset and pass
@@ -77,7 +158,7 @@ def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
     def map_fn(x): return _deserialize(x,
                                        hits_type=in_type,
                                        out_len=out_len,
-                                       bucket_fn=bucket_fn)
+                                       out_class_bins=out_class_bins)
 
     # Additional options to pass in dataset.map
     # - num_threads
@@ -118,18 +199,15 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
 
         # Length of output tensor, numer of classes
         out_len = len(out_class_bins) + 1
-        # Prepare customized no-arg bucketize function
 
-        def bucket_fn(x): return np.digitize(x=x, bins=out_class_bins)
         # Prepare customized map function: (filename) => Dataset.map(...)
-
         def map_fn(filename): return _new_tfrecord_dataset(
             filename,
             compression=compression_type,
             parallel_calls=cores_count,
             in_type=in_type,
             out_len=out_len,
-            bucket_fn=bucket_fn)
+            out_class_bins=out_class_bins)
 
         if mapping_type == PIPE_MAPPING_TYPE.INTERLEAVE:
             # Now create proper dataset with interleaved samples from each TFRecord

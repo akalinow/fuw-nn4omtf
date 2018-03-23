@@ -9,7 +9,7 @@ Content
 
 Here is short description. I tried to keep my code well documented, so it's just a brief.
 
-Package (will) contain:
+Package contains:
 
 * `OMTFDataset` - handles data from Monte Carlo OMTF simulation, 
   set of TFRecord files, imports OMTF simulation data from `*.npz` files and saves as TFRecords files
@@ -19,16 +19,18 @@ Package (will) contain:
 * `OMTFInputPipe` - creates customized pipe from provided dataset, helps with model feeding
 * some utils - please, see `root_utils` and `utils` directory
 
-To do
---------------
-
-* possibility of dumping model, getting pure varables in bytes or whatever
-* test and compare procedure
-* upgrade statistics collection
-* analytics feature (at least for input) - preview of weigths and activation patterns => understanding of learned features
-* dry run option - runtime estimation?
-
-* InputPipe - fetching additional data, raw production data or even related omtf data
+Data available from OMTFInputPipe:
+- hits array (full / reduced)
+- production data:
+  - pt label
+  - sign label
+  - pt original value
+  - pt code
+  - pt class
+- OMTF data:
+  - pt label
+  - sign label
+  - pt value
 
 --------------
 

@@ -22,6 +22,9 @@ class NPZ_FIELDS:
     PROD = "prod"
     PROD_SHAPE = [4]
     PROD_IDX_PT = 0
+    PROD_IDX_SIGN = 3
+    OMTF_IDX_PT = 1
+    OMTF_IDX_SIGN = 0
     OMTF = "omtf"
     OMTF_SHAPE = [6]
     HITS_FULL = "hits_full"
