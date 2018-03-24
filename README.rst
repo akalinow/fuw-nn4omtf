@@ -16,24 +16,10 @@ Package contains:
 * `OMTFNN` - wrapper for network and its metadata
 * `OMTFNNStorage` - manager of OMTFNNs, helps keeping whole data in one place
 * `OMTFRunner` - trains and tests prepared models, takes dataset and feeds model, returns some results
-* `OMTFInputPipe` - creates customized pipe from provided dataset, helps with model feeding
+* `OMTFInputPipe` - creates customized pipe from provided dataset, helps with model feeding, provides additional data which helps with NN & OMTF comparison
+* `OMTFStatistics` - data container
 * some utils - please, see `root_utils` and `utils` directory
 
-
-Data available from OMTFInputPipe:
-
-* hits array (full / reduced)
-* production data:
-  * pt label
-  * sign label
-  * pt original value
-  * pt code
-  * pt class
-
-* OMTF data:
-  * pt label
-  * sign label
-  * pt value
 
 --------------
 
