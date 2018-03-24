@@ -69,4 +69,4 @@ class OMTFInputPipe:
         try:
             return self.session.run(self.next_op)
         except tf.errors.OutOfRangeError:
-            return None, None, None
+            return None, None, None, None

@@ -7,7 +7,9 @@
 """
 
 import tensorflow as tf
-
+from nn4omtf.network.statistics import OMTFStatistics
+from nn4omtf.network.stats_const import NN_CNAMES
+from nn4omtf.network.input_pipe_const import PIPE_EXTRA_DATA_NAMES
 
 def setup_trainer(net_pt_out, net_sgn_out, labels_pt, 
         labels_sgn, learning_rate=1e-3):
@@ -60,7 +62,7 @@ def setup_accuracy(net_pt_out, net_sgn_out, pt_labels, sgn_labels):
                 net_pt_class_out, 
                 tf.argmax(pt_labels, 1))
 
-        net_sng_class_out = tf.argmax(net_sgn_out, 1)
+        net_sgn_class_out = tf.argmax(net_sgn_out, 1)
         sgn_correct_prediction = tf.equal(
                 net_sgn_class_out, 
                 tf.argmax(sgn_labels, 1))
@@ -72,22 +74,20 @@ def setup_accuracy(net_pt_out, net_sgn_out, pt_labels, sgn_labels):
         sgn_accuracy = tf.reduce_mean(sgn_correct_prediction)
         tf.summary.scalar('pt_accuracy', pt_accuracy)
         tf.summary.scalar('sgn_accuracy', sgn_accuracy)
-    return pt_accuracy, sgn_accuracy, net_pt_class_out, net_pt_class_out
+    return pt_accuracy, sgn_accuracy, net_pt_class_out, net_sgn_class_out
 
 
 def collect_statistics(
         sess,           # Session
         sess_name,
         pipe,           # Feed input pipe
-        net_in,         # Network input
+        net_pholders,   # Network placeholders
         net_pt_out,     # Network pt output (logits)
         net_sgn_out,    # Network sgn output (logits) 
         net_pt_class,   # Network pt output argmax (int)
         net_sgn_class,  # Network sgn output argmax (int)
         pt_acc,         # pt accyracy node
         sgn_acc,        # sign accuracy node
-        pt_labels,      # labels placeholder
-        sgn_labels,
         summary_op):
     """Statistics collector
     Run network and put data into OMTFStatistics object.
@@ -95,59 +95,72 @@ def collect_statistics(
         sess: TF session
         sess_name: session name
         pipe: Feed input pipe
-        net_in: Network input
+        net_pholders: Network placeholders
         net_pt_out: Network pt output (logits)
         net_sgn_out: Network sgn output (logits) 
         net_pt_class: Network pt output argmax (int)
         net_sgn_class: Network sgn output argmax (int)
         pt_acc: pt accyracy node
         sgn_acc: sign accuracy node
-        pt_labels: pt labels placeholder
-        sgn_labels: charge sign labels placeholder
         summary_op: summary tensor
 
     Returns:
         tuple of:
             - list of summaries
-            - accuracy (float)
+            - accuracy dict
             - OMTFStatistics object
     """
     pipe.initialize(sess)
     summaries = []
     pt_res = .0
+    sgn_res = .0
     cnt = 0
     stats = OMTFStatistics(sess_name)
 
     while True:
-        # Get extra data and put into statistics
-        data_in, data_labels, extra = pipe.fetch()
-        if train_in is None:
-            vp("Train dataset is empty!")
+        # Get also extra data dict and put into statistics
+        datalist = pipe.fetch()
+        if datalist[0] is None:
             break
 
         # Prepare feed dict
-        feed_dict = {
-                net_in: data_in,
-                pt_labels: data_labels[PIPE_OUT_DATA.TRAIN_PROD_PT],
-                sgn_labels: data_labels[PIPE_OUT_DATA.TRAIN_PROD_SGN]
-        }
-        run_in = [
-                summary_op,
-                pt_acc,
-                sgn_acc,
-                net_pt_class,
-                net_sgn_class
+        feed_dict = dict([(k, v) for k, v in zip(net_pholders, datalist[:-1])])
+
+        # Get basic set of data
+        input_basic = [
+            summary_op,
+            pt_acc,
+            sgn_acc
         ]
-        run_out = session.run(run_in, feed_dict=feed_dict)
-        print("DEBUG:", run_out)
-        summaries.append(run_out[0])
-        stats.append(run_out[1:])
+        
+        # Request extra data
+        # Order is important, see `NN_CNAMES` in stats_const.py
+        input_extra = [
+            net_pt_class,
+            net_sgn_class,
+            net_pt_out,
+            net_sgn_out
+        ]
+        run_input = input_basic + input_extra
+        run_output = sess.run(run_input, feed_dict=feed_dict)
 
-        l = data_in.shape[0]
+        # Accumulate overall results from all batches
+        l = datalist[0].shape[0]
         cnt += l
-        pt_res += l * run_out[1]
-        sgn_res += l * run_out[2]
+        pt_res += l * run_output[1]
+        sgn_res += l * run_output[2]
+        
+        summaries.append(run_output[0])
 
-    return summaries, pt_res / cnt, sgn_res / cnt, stats
+        # Prapare extra result dict, merge (k, v) pairs
+        kvs = [(k, v) for k, v in zip(NN_CNAMES, run_output[3:])] \
+                + list(datalist[-1].items())
+        stats.append(cols_dict=dict(kvs))
+        
+    acc = {
+        "pt": pt_res / cnt,
+        "sgn": sgn_res / cnt
+    }
+    return summaries, acc, stats
     
 

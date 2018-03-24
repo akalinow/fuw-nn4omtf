@@ -208,7 +208,6 @@ class OMTFDataset:
                         NPZ_FIELDS.PROD,
                         NPZ_FIELDS.PT_CODE]
         data_to_save = dict([(k, data[k]) for k in to_save_list])
-        print(data_to_save)
         ev_save = int(self.params['events_frac'] * ev_all)
         if verbose:
             print("Events in file: %d" % ev_all)

@@ -130,7 +130,7 @@ class OMTFNN:
         path = os.path.join(self.path, 
                 OMTFNN.CONST.STATISTICS_DIR, stats.sess_name)
         os.makedirs(path, exist_ok=True)
-        idx = len(os.listdir(path)
+        idx = len(os.listdir(path))
         filename = os.path.join(path, str(idx))
         with open(filename, 'wb') as f:
             pickle.dump(stats, f)
@@ -178,9 +178,8 @@ class OMTFNN:
         assert isinstance(x, tf.Tensor), "Input is not a tf.Tensor!"
         assert isinstance(y_pt, tf.Tensor), "pt output is not a tf.Tensor!"
         assert isinstance(y_sgn, tf.Tensor), "sgn output is not a tf.Tensor!"
-        assert intype == HITS_TYPE.FULL 
-                or intype == HITS_TYPE.REDUCED, 
-                "Input type is not one of {} | {}".format(
+        assert intype == HITS_TYPE.FULL or intype == HITS_TYPE.REDUCED,     \
+                "Input type is not one of {} | {}".format(                  \
                 HITS_TYPE.REDUCED, HITS_TYPE.FULL)
         xs_req = HITS_TYPE.FULL_SHAPE if intype == HITS_TYPE.FULL else HITS_TYPE.REDUCED_SHAPE
         xs_req.insert(0, None)

@@ -16,9 +16,10 @@ from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network import OMTFNN
 from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 
-from nn4omtf.network.runner_helpers import check_accuracy, setup_accuracy, setup_trainer
+from nn4omtf.network.runner_helpers import collect_statistics,\
+        setup_accuracy, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
-from nn4omtf.network.input_pipe_const import PIPE_OUT_DATA
+from nn4omtf.network.input_pipe_const import PIPE_EXTRA_DATA_NAMES
 
 
 class OMTFRunner:
@@ -135,7 +136,7 @@ class OMTFRunner:
     def show_params(self):
         print("==== OMTFRunner configuration")
         for k, v in self.params.items():
-            print(">{:20s}:{}".format(k, v))
+            print("> {:.<20}:{}".format(k, v))
         print("=============================")
 
 
@@ -164,7 +165,7 @@ class OMTFRunner:
                     out_class_bins=opt.out_class_bins,
                     batch_size=opt.batch_size,
                     shuffle=opt.shuffle,
-                    reps=opt.reps)
+                    reps=opt.epochs)
             valid_pipe = OMTFInputPipe(
                     dataset=self.dataset,
                     name='valid',
@@ -182,11 +183,18 @@ class OMTFRunner:
             init = sess.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
             vp("Loaded model: %s" % self.network.name)
 
+            # ==== NETWORK PLACEHOLDERS
             pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
                                     name="pt_labels")
             sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
                                     name="sgn_labels")
-            
+            net_pholders = [
+                net_in,
+                pt_labels,
+                sgn_labels
+            ]
+
+            # ==== SETUP TRAINER NODES
             pt_train_op, sgn_train_op = setup_trainer(
                     net_pt_out=net_pt_out,
                     net_sgn_out=net_sgn_out,
@@ -219,17 +227,13 @@ class OMTFRunner:
             while i <= opt.steps or opt.steps < 0:
                 # Fetch next batch of input data and its labels
                 # Ignore extra data during trainings 
-                train_in, train_labels, _ = train_pipe.fetch()
-                if train_in is None:
+                train_data = train_pipe.fetch()
+                if train_data[0] is None:
                     vp("Train dataset is empty!")
                     break
 
                 # Prepare training feed dict
-                train_feed_dict = {
-                        net_in: train_in,
-                        pt_labels: train_labels[PIPE_OUT_DATA.TRAIN_PROD_PT],
-                        sgn_labels: train_labels[PIPE_OUT_DATA.TRAIN_PROD_SGN]
-                }
+                train_feed_dict = dict([(k, v) for k, v in zip(net_pholders, train_data[:-1])])
 
                 # Configure extra options
                 args = {
@@ -245,9 +249,10 @@ class OMTFRunner:
                         args['run_metadata'] = tf.RunMetadata()
                 
                 # Do mini-batch iteration
-                summary, _ = sess.run(
-                        [summary_op, pt_train_op, sgn_train_op], 
-                        **args)
+                summary, _, _ = sess.run(
+                    [summary_op, pt_train_op, sgn_train_op], 
+                    **args
+                )
                 
                 # Save training logs for TensorBoard
                 if opt.logdir is not None:
@@ -258,27 +263,17 @@ class OMTFRunner:
 
                 self._next_tick()
                 if i % opt.acc_ival == 0:
-                    # TODO Accuracy measurement will be changed to
-                    # general statistics collection in special object
-                    # which could be saved and analyzed offline 
-#                    summaries, accuracy = check_accuracy(
-#                            session=sess,
-#                            pipe=valid_pipe,
-#                            net_in=net_in,
-#                            labels=labels,
-#                            summary_op=summary_op,
-#                            accuracy_op=accuracy_op)
-                    summaries, accuracy, nn_stats = collect_statistics(
+                    summaries, acc_d, nn_stats = collect_statistics(
                             sess=sess,
                             sess_name=opt.sess_name,
                             pipe=valid_pipe,            # test using valid set
-                            net_in=net_in,              # net input tensor
+                            net_pholders=net_pholders,  # net placeholders
                             net_pt_out=net_pt_out,      # pt logits out
                             net_sgn_out=net_sgn_out,    # sgn logits out
                             net_pt_class=pt_class_op,   # pt class out
                             net_sgn_class=sgn_class_op, # sgn class out
-                            pt_labels=pt_labels,        # labels placeholder
-                            sgn_labels=sgn_labels
+                            pt_acc=pt_acc_op, 
+                            sgn_acc=sgn_acc_op,
                             summary_op=summary_op)      # summary operator
                     
                     nn_stats.set_bins(opt.out_class_bins)
@@ -288,14 +283,16 @@ class OMTFRunner:
                             valid_summary_writer.add_summary(s, i)
                     
                     self.network.add_summaries(summaries, i)
-                    self.network.add_log(accuracy, i, opt.sess_name)
+                    self.network.add_log(acc_d, i, opt.sess_name)
                     self.network.add_statistics(nn_stats)
+                    print(nn_stats)
                     
                     stamp = self._next_tick()
                     vp("Validation @ step {step}".format(step=i))
                     vp("Now: {datetime}, elapsed: {elapsed:.1f} sec.".format(**stamp))
                     vp("Validation run took: {last:.1f} sec.".format(**stamp))
-                    vp("Accuracy: %f" % accuracy)
+                    vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
+                        **acc_d))
 
                 i += 1
 
@@ -368,13 +365,14 @@ class OMTFRunner:
                     net_pt_class=pt_class_op,   # pt class out
                     net_sgn_class=sgn_class_op, # sgn class out
                     pt_labels=pt_labels,        # labels placeholder
-                    sgn_labels=sgn_labels
+                    sgn_labels=sgn_labels,
                     summary_op=summary_op)      # summary operator
 
             nn_stats.set_bins(opt.out_class_bins)
 
             self.network.add_log(accuracy, 1, opt.sess_name)
             self.network.add_statistics(nn_stats)
+            print(nn_stats)
 
             stamp = self._next_tick()
 

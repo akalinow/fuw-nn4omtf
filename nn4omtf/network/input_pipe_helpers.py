@@ -9,8 +9,10 @@ import numpy as np
 import time
 import multiprocessing
 import tensorflow as tf
+
 from nn4omtf.dataset.const import NPZ_FIELDS, HITS_TYPE
-from nn4omtf.network.input_pipe_const import PIPE_MAPPING_TYPE, PIPE_OUT_DATA
+from nn4omtf.network.input_pipe_const import \
+    PIPE_MAPPING_TYPE, PIPE_EXTRA_DATA_NAMES
 
 
     
@@ -47,6 +49,7 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
                     (because this value may be equal -2... read bucket
                     function description)
     """
+
     prod_dim = NPZ_FIELDS.PROD_SHAPE
     omtf_dim = NPZ_FIELDS.OMTF_SHAPE
 
@@ -68,7 +71,8 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
     hits_arr = examples[hits]
     prod_arr = examples[NPZ_FIELDS.PROD]
     omtf_arr = examples[NPZ_FIELDS.OMTF]
-    pt_code = examples[NPZ_FIELDS.PT_CODE]
+    pt_code = examples[NPZ_FIELDS.PT_CODE][0]
+
     # ==== Prepare customized no-param bucketizing functions
     prod_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins)
     # Bucketize sign: 0 -> -, 1 -> +
@@ -91,21 +95,18 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
                    tf.int64,
                    stateful=False,
                    name='digitize_prod_pt')
+    # Encode pt
     prod_pt_label = tf.one_hot(prod_pt_k, out_len)
+
     # Encode signs
-    prod_sign_label = tf.py_func(prod_sgn_bucket_fn,
+    prod_sign_k = tf.py_func(prod_sgn_bucket_fn,
                     [prod_arr[NPZ_FIELDS.PROD_IDX_SIGN]],
                     tf.int64,
                     stateful=False,
                     name='muon_sgn_code')
+    prod_sign_label = tf.one_hot(prod_sign_k, 2)
     
-    train_labels = {
-            PIPE_OUT_DATA.TRAIN_PROD_PT: prod_pt_label,
-            PIPE_OUT_DATA.TRAIN_PROD_SGN: prod_sign_label
-    }
-    # ======= END OF TRAINING DATA
-    
-    # ======= ADDITIONAL DATA
+    # ======= EXTRA OMTF DATA
     omtf_sign_k = tf.py_func(omtf_sgn_bucket_fn,
                     [omtf_arr[NPZ_FIELDS.OMTF_IDX_SIGN]],
                     tf.int64,
@@ -119,16 +120,20 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
                    stateful=False,
                    name='digitize_omtf_pt')
 
-    # Create extra data dict with production data. 
-    extra = {
-        PIPE_OUT_DATA.EXTRA_OMTF_PT_CLASS: omtf_pt_k,
-        PIPE_OUT_DATA.EXTRA_OMTF_PT_VAL: omtf_arr[NPZ_FIELDS.OMTF_IDX_PT],
-        PIPE_OUT_DATA.EXTRA_OMTF_SGN_CLASS: omtf_sign_k,
-        PIPE_OUT_DATA.EXTRA_PROD_PT_CODE: pt_code,
-        PIPE_OUT_DATA.EXTRA_PROD_PT_VAL: prod_arr[NPZ_FIELDS.PROD_IDX_PT],
-        PIPE_OUT_DATA.EXTRA_PROD_PT_CLASS: prod_pt_k
-    }
-    return examples[hits], train_labels, extra
+    # ======== EXTRA DATA DICT
+    # See `PIPE_EXTRA_DATA_NAMES` for correct order of fields
+    vals = [
+        pt_code,
+        prod_arr[NPZ_FIELDS.PROD_IDX_PT],
+        prod_pt_k,
+        prod_sign_k,
+        omtf_arr[NPZ_FIELDS.OMTF_IDX_PT],
+        omtf_pt_k,
+        omtf_sign_k
+    ]
+    edata_dict = dict([(k, v) for k, v in zip(PIPE_EXTRA_DATA_NAMES, vals)])
+    
+    return examples[hits], prod_pt_label, prod_sign_label, edata_dict
 
 
 def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
