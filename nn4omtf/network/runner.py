@@ -285,7 +285,6 @@ class OMTFRunner:
                     self.network.add_summaries(summaries, i)
                     self.network.add_log(acc_d, i, opt.sess_name)
                     self.network.add_statistics(nn_stats)
-                    print(nn_stats)
                     
                     stamp = self._next_tick()
                     vp("Validation @ step {step}".format(step=i))

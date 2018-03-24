@@ -143,25 +143,48 @@ class OMTFNN:
         """
         path = os.path.join(self.path, 
                 OMTFNN.CONST.STATISTICS_DIR) 
+        res = []
+        cnt = []
         files = os.listdir(path)
-        count = []
         for f in files:
-            stats = os.listdir(os.path.join(path, f))
-            count.append(len(stats))
-        return zip(files, count)
+            l1_dir = os.path.join(path, f)
+            subdir = os.listdir(l1_dir)
+            for d in subdir:
+                p = os.path.join(l1_dir, d)
+                res.append(os.path.join(f,d))
+                cnt.append(len(os.listdir(p)))
+        return zip(res, cnt)
+
+    def match_statistics(self, regexp):
+        entries = []
+        base = os.path.join(self.path, 
+                OMTFNN.CONST.STATISTICS_DIR)
+        for stat_base in os.listdir(base):
+            stat_full = os.path.join(base, stat_base)
+            stat_exs = os.listdir(stat_full)
+            for stat_ex in stat_exs:
+                entry = os.path.join(stat_base, stat_ex)
+                if re.match(regexp, entry) is not None:
+                    full = os.path.join(stat_full, stat_ex)
+                    cnt = len(os.listdir(full))
+                    entries.append((entry, full, cnt))
+        return entries
 
 
-    def get_statistics(self, sess_name, idx):
-        """Load statistics object.
+    def get_statistics_objs(self, fpath):
+        """Load statistics objects from dir.
         Args:
-            sess_name: session name
-            idx: statistics idx
+            fpath: path
         """
-        filename = os.path.join(self.path, 
-                OMTFNN.CONST.STATISTICS_DIR, sess_name, str(idx))
-        with open(filename, 'rb') as f:
-            obj = pickle.load(f)
-        return obj
+        path = os.path.join(self.path, 
+                OMTFNN.CONST.STATISTICS_DIR, fpath)
+        objs = []
+        for fname in os.listdir(path):
+            fullpath = os.path.join(path,fname)
+            with open(fullpath, 'rb') as f:
+                objs.append((int(fname), pickle.load(f)))
+        objs.sort(key=lambda x: x[0])
+        return objs
 
 
     def _check_builder_results(x, y_pt, y_sgn, pt_class, intype):
@@ -328,9 +351,14 @@ class OMTFNN:
             printable summary
         """
         r = "Model name: %s\n" % self.name
-        r += "{:^40}{:^15}{:^15}\n".format("Session name", "Step", "Accuracy")
+        r += "{:^40}{:^15}{:^15}{:^15}\n".format("Session name", "Step", "pt acc", "sgn acc")
         for rec in self.log:
-            r += "{:<40}{:<15}{:<15.3}\n".format(rec[2], rec[1], rec[0])
+            r += "{:<40}{:<15}{:<15.3}{:<15.3}\n".format(rec[2], rec[1], rec[0]['pt'],rec[0]['sgn'])
+        r += "\nAvailable statistics list:\n"
+        idx = 0
+        for e, c in self.list_statistics():
+            r += "%3d : %s, files: %d\n" % (idx, e, c)
+            idx += 1
         return r
 
     def __str__(self):
