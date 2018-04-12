@@ -37,8 +37,8 @@ class OMTFRunner:
         "batch_size": 1000,
         "sess_prefix": "",
         "shuffle": False,
-        "acc_ival": 100,
-        "get_meta_ival": 500,
+        "acc_ival": 1000,
+        "get_meta_ival": 5000,
         "epochs": 1,
         "steps": -1,
         "logdir": None,
@@ -224,77 +224,81 @@ class OMTFRunner:
             i = 1            
             stamp = self._start_clock()
             vp("{start_datetime} - training started".format(**stamp))
-            while i <= opt.steps or opt.steps < 0:
-                # Fetch next batch of input data and its labels
-                # Ignore extra data during trainings 
-                train_data = train_pipe.fetch()
-                if train_data[0] is None:
-                    vp("Train dataset is empty!")
-                    break
+           
+            try:
+                while i <= opt.steps or opt.steps < 0:
+                    # Fetch next batch of input data and its labels
+                    # Ignore extra data during trainings 
+                    train_data = train_pipe.fetch()
+                    if train_data[0] is None:
+                        vp("Train dataset is empty!")
+                        break
 
-                # Prepare training feed dict
-                train_feed_dict = dict([(k, v) for k, v in zip(net_pholders, train_data[:-1])])
+                    # Prepare training feed dict
+                    train_feed_dict = dict([(k, v) for k, v in zip(net_pholders, train_data[:-1])])
 
-                # Configure extra options
-                args = {
-                    'feed_dict': train_feed_dict,
-                    'options': None,
-                    'run_metadata': None
-                }
-    
-                if opt.get_meta_ival is not None:
-                    if i % opt.get_meta_ival == 0:
-                        args['options'] = tf.RunOptions(
-                            trace_level=tf.RunOptions.FULL_TRACE)
-                        args['run_metadata'] = tf.RunMetadata()
-                
-                # Do mini-batch iteration
-                summary, _, _ = sess.run(
-                    [summary_op, pt_train_op, sgn_train_op], 
-                    **args
-                )
-                
-                # Save training logs for TensorBoard
-                if opt.logdir is not None:
-                    train_summary_writer.add_summary(summary, i)
-                    if args['options'] is not None:
-                        train_summary_writer.add_run_metadata(
-                            args['run_metadata'], "step-%d" % i)
-
-                self._next_tick()
-                if i % opt.acc_ival == 0:
-                    summaries, acc_d, nn_stats = collect_statistics(
-                            sess=sess,
-                            sess_name=opt.sess_name,
-                            pipe=valid_pipe,            # test using valid set
-                            net_pholders=net_pholders,  # net placeholders
-                            net_pt_out=net_pt_out,      # pt logits out
-                            net_sgn_out=net_sgn_out,    # sgn logits out
-                            net_pt_class=pt_class_op,   # pt class out
-                            net_sgn_class=sgn_class_op, # sgn class out
-                            pt_acc=pt_acc_op, 
-                            sgn_acc=sgn_acc_op,
-                            summary_op=summary_op)      # summary operator
+                    # Configure extra options
+                    args = {
+                        'feed_dict': train_feed_dict,
+                        'options': None,
+                        'run_metadata': None
+                    }
+        
+                    if opt.get_meta_ival is not None:
+                        if i % opt.get_meta_ival == 0:
+                            args['options'] = tf.RunOptions(
+                                trace_level=tf.RunOptions.FULL_TRACE)
+                            args['run_metadata'] = tf.RunMetadata()
                     
-                    nn_stats.set_bins(opt.out_class_bins)
-
+                    # Do mini-batch iteration
+                    summary, _, _ = sess.run(
+                        [summary_op, pt_train_op, sgn_train_op], 
+                        **args
+                    )
+                    
+                    # Save training logs for TensorBoard
                     if opt.logdir is not None:
-                        for s in summaries:
-                            valid_summary_writer.add_summary(s, i)
-                    
-                    self.network.add_summaries(summaries, i)
-                    self.network.add_log(acc_d, i, opt.sess_name)
-                    self.network.add_statistics(nn_stats)
-                    
-                    stamp = self._next_tick()
-                    vp("Validation @ step {step}".format(step=i))
-                    vp("Now: {datetime}, elapsed: {elapsed:.1f} sec.".format(**stamp))
-                    vp("Validation run took: {last:.1f} sec.".format(**stamp))
-                    vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
-                        **acc_d))
+                        train_summary_writer.add_summary(summary, i)
+                        if args['options'] is not None:
+                            train_summary_writer.add_run_metadata(
+                                args['run_metadata'], "step-%d" % i)
 
-                i += 1
+                    self._next_tick()
+                    if i % opt.acc_ival == 0:
+                        summaries, acc_d, nn_stats = collect_statistics(
+                                sess=sess,
+                                sess_name=opt.sess_name,
+                                pipe=valid_pipe,            # test using valid set
+                                net_pholders=net_pholders,  # net placeholders
+                                net_pt_out=net_pt_out,      # pt logits out
+                                net_sgn_out=net_sgn_out,    # sgn logits out
+                                net_pt_class=pt_class_op,   # pt class out
+                                net_sgn_class=sgn_class_op, # sgn class out
+                                pt_acc=pt_acc_op, 
+                                sgn_acc=sgn_acc_op,
+                                summary_op=summary_op)      # summary operator
+                        
+                        nn_stats.set_bins(opt.out_class_bins)
 
+                        if opt.logdir is not None:
+                            for s in summaries:
+                                valid_summary_writer.add_summary(s, i)
+                        
+                        self.network.add_summaries(summaries, i)
+                        self.network.add_log(acc_d, i, opt.sess_name)
+                        self.network.add_statistics(nn_stats)
+                        
+                        stamp = self._next_tick()
+                        vp("Validation @ step {step}".format(step=i))
+                        vp("Now: {datetime}, elapsed: {elapsed:.1f} sec.".format(**stamp))
+                        vp("Validation run took: {last:.1f} sec.".format(**stamp))
+                        vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
+                            **acc_d))
+
+                    i += 1
+            except KeyboardInterrupt:
+                print("Training stopped by user!")
+                
             # End of main while loop, training finished
             stamp = self._next_tick()
             vp("{datetime} - training finished!".format(**stamp))
@@ -323,26 +327,28 @@ class OMTFRunner:
         vp("Preparing test session: %s" % opt.sess_name)
         vp("Creating input pipe...")
         with tf.name_scope("input_pipes"):
+            # Input pipes configuration
             test_pipe = OMTFInputPipe(
                     dataset=self.dataset,
                     name='test',
                     hits_type=opt.in_type,
-                    batch_size=opt.valid_batch_size,
-                    out_class_bins=opt.out_class_bins)
-
+                    out_class_bins=opt.out_class_bins,
+                    batch_size=opt.valid_batch_size)
         self.show_params()
 
         with tf.Session() as sess:
             _, net_in, net_pt_out, net_sgn_out = self.network.restore(
                     sess=sess, sess_name=opt.sess_name)
-
             vp("Loaded model: %s" % self.network.name)
             pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
                                     name="pt_labels")
-
             sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
                                     name="sgn_labels")
-            
+            net_pholders = [
+                net_in,
+                pt_labels,
+                sgn_labels
+            ]
             pt_acc_op, sgn_acc_op, pt_class_op, sgn_class_op = setup_accuracy(
                     net_pt_out=net_pt_out,
                     net_sgn_out=net_sgn_out,
@@ -354,22 +360,21 @@ class OMTFRunner:
             stamp = self._start_clock()
             vp("{start_datetime} - test started!".format(**stamp))
 
-            summaries, accuracy, nn_stats = collect_statistics(
+            summaries, acc_d, nn_stats = collect_statistics(
                     sess=sess,
                     sess_name=opt.sess_name,
-                    pipe=test_pipe,             # test using valid set
-                    net_in=net_in,              # net input tensor
+                    pipe=test_pipe,            # test using valid set
+                    net_pholders=net_pholders,  # net placeholders
                     net_pt_out=net_pt_out,      # pt logits out
                     net_sgn_out=net_sgn_out,    # sgn logits out
                     net_pt_class=pt_class_op,   # pt class out
                     net_sgn_class=sgn_class_op, # sgn class out
-                    pt_labels=pt_labels,        # labels placeholder
-                    sgn_labels=sgn_labels,
+                    pt_acc=pt_acc_op, 
+                    sgn_acc=sgn_acc_op,
                     summary_op=summary_op)      # summary operator
-
             nn_stats.set_bins(opt.out_class_bins)
 
-            self.network.add_log(accuracy, 1, opt.sess_name)
+            self.network.add_log(acc_d, 1, opt.sess_name)
             self.network.add_statistics(nn_stats)
             print(nn_stats)
 
@@ -377,11 +382,11 @@ class OMTFRunner:
 
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
-            vp("Accuracy: %f" % accuracy)
+            vp("Accuracy: %f" % acc_d)
 
         res = {
             'sess_name': opt.sess_name,
-            'accuracy': accuracy,
+            'accuracy': acc_d,
             'model': self.network.name
         }
         return res

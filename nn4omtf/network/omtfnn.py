@@ -13,6 +13,7 @@ import os
 import numpy as np
 import pickle
 import re
+import shutil 
 
 import nn4omtf.utils as utils
 from nn4omtf.dataset.const import HITS_TYPE
@@ -47,8 +48,7 @@ class OMTFNN:
         self.name = name
         self.path = os.path.join(path, name)
         obj_file = os.path.join(self.path, OMTFNN.CONST.OBJ_FILENAME)
-        assert not os.path.exists(
-            obj_file), "OMTFNN object already exists in this location!"
+        shutil.rmtree(self.path, ignore_errors=True)
         os.makedirs(self.path)
 
         # Create graph
