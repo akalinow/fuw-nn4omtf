@@ -24,7 +24,8 @@ class OMTFDataset:
             'train_frac': 0.7,
             'valid_frac': 0.15,
             'test_frac': 0.15,
-            'compress': False,
+            'no_compress': False,
+            'filter_no_signal': False
     }
 
 
@@ -62,9 +63,9 @@ class OMTFDataset:
             p = os.path.join(self.path, el)
             os.makedirs(p, exist_ok=True)
 
-        self.write_opt = None
-        if self.params['compress']:
-            self.write_opt = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        self.write_opt = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        if self.params['no_compress']:
+            self.write_opt = None
     
 
     def load(path):
@@ -201,16 +202,29 @@ class OMTFDataset:
         code = data[NPZ_FIELDS.PT_CODE]
         sign = data[NPZ_FIELDS.SIGN]
         ev_all = data[NPZ_FIELDS.EV_N]
+        ev_all_orig = ev_all
         data[NPZ_FIELDS.PT_CODE] = np.ones(ev_all) * code
+
         to_save_list = [NPZ_FIELDS.HITS_FULL, 
                         NPZ_FIELDS.HITS_REDUCED, 
                         NPZ_FIELDS.OMTF,
                         NPZ_FIELDS.PROD,
                         NPZ_FIELDS.PT_CODE]
-        data_to_save = dict([(k, data[k]) for k in to_save_list])
+        # Calculate no signal mask
+        mask = data[NPZ_FIELDS.HITS_REDUCED]    # Get array
+        mask = np.mean(mask, axis=(2,1))        # Calc mean of all data for each event
+        # Set False of all events where mean was equal 5400 (no signal was observed)
+        mask = mask < 5400.
+        if self.params['filter_no_signal']:
+            data_to_save = dict([(k, data[k][mask]) for k in to_save_list])
+            ev_all = np.sum(mask)
+        else:
+            data_to_save = dict([(k, data[k]) for k in to_save_list])
         ev_save = int(self.params['events_frac'] * ev_all)
         if verbose:
-            print("Events in file: %d" % ev_all)
+            print("Events in file: %d" % ev_all_orig)
+            if self.params['filter_no_signal']:
+                print("After filtering left: %d (%.2f%% of all)" % (ev_all, ev_all / ev_all_orig * 100.))
             print("Events to save: %d (%0.2f%% of  all)" % (ev_save, ev_save * 100. / ev_all))
         filename = OMTFDataset.CONST.TF_FILENAME.format(
                 name=str(name).lower(),

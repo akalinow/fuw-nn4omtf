@@ -11,20 +11,25 @@ from IPython.display import clear_output, Image, display, HTML
 import numpy as np
 
 
-def weight_variable(shape, name=None):
+def weight_variable(shape, shape_in, name=None):
     """Generates a weight variable of a given shape.
     Args:
         - shape: variable tensor shape
+        - shape_in: input data shape
         - name(optional): variable tensor name
     Returns:
         Variable tensor
     """
-    initial = tf.truncated_normal(shape, stddev=0.1)
+    fanin = np.prod(shape_in)
+    stddev = np.square(2 / fanin)
+    initial = tf.truncated_normal(shape, stddev=stddev)
     return tf.Variable(initial)
 
 
-def bias_variable(shape, name=None):
+def bias_variable(shape, shape_in, name=None):
     """Generates a bias variable of a given shape.
+    NOTICE:
+        Constant initializaer... do not use it.
     Args:
         - shape: bias tensor shape
         - name(optional): bias tensor name
@@ -32,7 +37,7 @@ def bias_variable(shape, name=None):
         Bias variable tensor
     """
     initial = tf.constant(0.01, shape=shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
 
 def add_summary(var, add_stddev=True, add_min=True, add_max=True, add_hist=True):

@@ -5,12 +5,14 @@
 
 ## Required
 
-* [IN PROGRESS] Prepare output for +/- charge sign classification
+* [IN PROGRESS] Upgrade statistics collection
+* Stopping training with keyboard interrupt
+* record stats from validation only
+* store only few of all statistics in network...
 
 * Test and compare procedure
 	* Testing - done
 	* Comparing models - take data from test runs and generate report
-* [IN PROGRESS] Upgrade statistics collection
 
 * Analytics tools (at least for input)
 	* preview of weigths and activation patterns => understanding of learned features
@@ -22,6 +24,11 @@
   * offline - by dumping data into file?
     * create tools for dump analiytics
     * histograms ---^ analitycs
+
+* utilities for:
+    * showing up probabilities at the end
+    * utilities for auto generation of layers
+    * utils for normalization
 
 
 * neuron activation analitycs
