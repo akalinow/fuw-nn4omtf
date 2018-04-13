@@ -382,7 +382,8 @@ class OMTFRunner:
 
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
-            vp("Accuracy: %f" % acc_d)
+            vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
+                **acc_d))
 
         res = {
             'sess_name': opt.sess_name,
