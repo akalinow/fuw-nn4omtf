@@ -3,11 +3,18 @@
 ## Notes
 - OMTF & NN results can be compared only for given set of bins
 
+## Done
+* Stopping training with keyboard interrupt
+
 ## Required
 
+* add samples limits in `valid` and `test` process
+* record important only
+* record stats only in `valid` 
+* save data summaries in csv
+* megre many summaries before adding to TB 
+
 * [IN PROGRESS] Upgrade statistics collection
-* Stopping training with keyboard interrupt
-* record stats from validation only
 * store only few of all statistics in network...
 
 * Test and compare procedure
