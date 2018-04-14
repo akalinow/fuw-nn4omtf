@@ -5,6 +5,12 @@
 
 ## Done
 * Stopping training with keyboard interrupt
+* [OMTFNN]
+        * Add additional requiremnt of special bin for `NOT KNOWN` state - `0`-pT bin edge
+        * Special `NOT KNOWN` state for sign - required in case when no signal was registered=
+* [INPUT PIPE] 
+        * applying transformation to input data 
+        * changed bucket-functions for `pt` and `sgn` data
 
 ## IN PROGRESS
 * Upgrade statistics collection
@@ -13,11 +19,7 @@
         * neuron activation analitycs
                 * generation of 3D historgram, -> neuron outputs over dataset, | probability, / pt code
 * cleanup `train` process 
-* [OMTFNN]
-        * Add additional bin for `NOT KNOWN` state (14-04-18)
 
-* [INPUT PIPE] 
-        * applying transformation to input data 
 * [NET BUILDER]
         * utilities for auto generation of layers
         * utils for normalization

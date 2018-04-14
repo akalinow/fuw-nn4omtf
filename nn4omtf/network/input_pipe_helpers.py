@@ -41,22 +41,23 @@ def _deserialize(
         out_len: output one-hot tensor length
         bucket_fn: float value classifier function
         detect_no_signal: map events with no signal registered to special state
+                It's used in `train` and `validation` phase.
+        remap_data: tuple of (NULLVAL, SHIFT), put NULLVAL instead of 5400 and
+                shift all other values by SHIFT to the right.
 
     Returns:
         data on single event which is 3-tuple containing:
-            - selected hits array (HITS_REDUCED | HITS_FULL)
-            - dict of labels for: 
+            - selected hits array (HITS_REDUCED | HITS_FULL), transfored or not
+            - dict with labels of: 
                 - production pt (1-hot encoded)
-                - production charge sign (0 negative, 1 positive)
+                - production charge sign (0 - not known, 1 - negative, 2 - positive)
             - dict with extra data:
                 - exact value of pt
                 - used pt code
                 - omtf recognized pt (1-hot)
                 - omtf recognized sign 
-                    (because this value may be equal -2... read bucket
-                    function description)
     """
-
+    no_signal = False
     prod_dim = NPZ_FIELDS.PROD_SHAPE
     omtf_dim = NPZ_FIELDS.OMTF_SHAPE
 
@@ -76,72 +77,78 @@ def _deserialize(
     examples = tf.parse_single_example(x, features)
 
     hits_arr = examples[hits]
-    # 
+    if remap_data is not None:
+        nullval, shift = remap_data
+        transform_fn = lambda x: np.where(x == 5400, nullval, x + shift)
+        hits_arr = tf.py_func(transform_fn,
+                            [hits_arr],
+                            tf.int64,
+                            stateful=False,
+                            name='input_data_transformation')
+    if detect_no_signal:
+        mean = tf.py_func(np.mean,
+                            [hits_arr],
+                            tf.int64,
+                            stateful=False,
+                            name='input_data_mean')
+        no_signal = mean >= 5399
+
     prod_arr = examples[NPZ_FIELDS.PROD]
     omtf_arr = examples[NPZ_FIELDS.OMTF]
     pt_code = examples[NPZ_FIELDS.PT_CODE][0]
 
-    # ==== Prepare customized no-param bucketizing functions
-    prod_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins)
-    # Bucketize sign: 0 -> -, 1 -> +
-    prod_sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[0])
-
-    omtf_bins = out_class_bins.copy()
-    omtf_bins.insert(0, 0)
-    omtf_bucket_fn = lambda x: (np.digitize(x=x, bins=omtf_bins) - 1)
-    
-    # Bucketizing function for OMTF charge sign parameter.
-    # Given bins may seems to be very strange, but...
-    # OMTF algo. in case of mismatch gives charge about -2.00...
-    # Off by one to match production label.
-    omtf_sgn_bucket_fn = lambda x: (np.digitize(x=x, bins=[-1.5, 0]) - 1)
+    # ==== Prepare customized no-param bucketizing function
+    # Bucket-functions are same for OMTF and NN.
+    # OMTF returns pt=-999 if it can't recognize any pattern in HITS array
+    # NN will do the same with PT and SIGN, it will say #0 class when
+    # there's no enough data in HITS array.
+    pt_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins)
+    sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[-1.5, 0])
 
     # ======= TRAINING DATA
     # Prepare production pt labels
-    prod_pt_k = tf.py_func(prod_bucket_fn,
-                   [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
-                   tf.int64,
-                   stateful=False,
-                   name='digitize_prod_pt')
-    # Encode pt
-    prod_pt_label = tf.one_hot(prod_pt_k, out_len)
-
-    # Encode signs
-    prod_sign_k = tf.py_func(prod_sgn_bucket_fn,
+    if no_signal:
+        prod_pt_k = 0
+        prod_sgn_k = 0
+    else:
+        prod_pt_k = tf.py_func(pt_bucket_fn,
+                    [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
+                    tf.int64,
+                    stateful=False,
+                    name='pt_class')
+        prod_sgn_k = tf.py_func(sgn_bucket_fn,
                     [prod_arr[NPZ_FIELDS.PROD_IDX_SIGN]],
                     tf.int64,
                     stateful=False,
-                    name='muon_sgn_code')
-    prod_sign_label = tf.one_hot(prod_sign_k, 2)
-    
+                    name='sgn_class')
+    prod_pt_label = tf.one_hot(prod_pt_k, out_len)
+    prod_sgn_label = tf.one_hot(prod_sgn_k, 3)
     # ======= EXTRA OMTF DATA
-    omtf_sign_k = tf.py_func(omtf_sgn_bucket_fn,
+    omtf_sgn_k = tf.py_func(sgn_bucket_fn,
                     [omtf_arr[NPZ_FIELDS.OMTF_IDX_SIGN]],
                     tf.int64,
                     stateful=False,
-                    name='omtf_sgn_code')
-
+                    name='omtf_sgn_class')
     # Encode omtf pt guessed values 
-    omtf_pt_k = tf.py_func(omtf_bucket_fn,
+    omtf_pt_k = tf.py_func(pt_bucket_fn,
                    [omtf_arr[NPZ_FIELDS.OMTF_IDX_PT]],
                    tf.int64,
                    stateful=False,
-                   name='digitize_omtf_pt')
-
+                   name='omtf_pt_class')
     # ======== EXTRA DATA DICT
     # See `PIPE_EXTRA_DATA_NAMES` for correct order of fields
     vals = [
         pt_code,
         prod_arr[NPZ_FIELDS.PROD_IDX_PT],
         prod_pt_k,
-        prod_sign_k,
+        prod_sgn_k,
         omtf_arr[NPZ_FIELDS.OMTF_IDX_PT],
         omtf_pt_k,
-        omtf_sign_k
+        omtf_sgn_k
     ]
     edata_dict = dict([(k, v) for k, v in zip(PIPE_EXTRA_DATA_NAMES, vals)])
     
-    return examples[hits], prod_pt_label, prod_sign_label, edata_dict
+    return hits_arr, prod_pt_label, prod_sign_label, edata_dict
 
 
 def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,

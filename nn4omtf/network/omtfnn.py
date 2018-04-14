@@ -202,6 +202,8 @@ class OMTFNN:
             It's requirement because network must have posibility to say 
             "I don't knot" just because no signal was observed by detector.
             And this case is in about 60% of all events!
+            `sign` output tensor MUST have length of 3 due to same reason 
+            as in case above. Net cannot guess, it must says "I DON'T KNOW".
         """
         assert pt_class[0] == 0, "`pt` class bins array MUST begin with ZERO!"
         assert isinstance(x, tf.Tensor), "Input is not a tf.Tensor!"
@@ -214,7 +216,7 @@ class OMTFNN:
         xs_req.insert(0, None)
         in_fmt = tf.TensorShape(xs_req)
         out_pt_fmt = tf.TensorShape([None, len(pt_class) + 1])
-        out_sgn_fmt = tf.TensorShape([None, 2])
+        out_sgn_fmt = tf.TensorShape([None, 3])
         x.shape.assert_is_compatible_with(in_fmt)
         y_pt.shape.assert_is_compatible_with(out_pt_fmt)
         y_sgn.shape.assert_is_compatible_with(out_sgn_fmt)
