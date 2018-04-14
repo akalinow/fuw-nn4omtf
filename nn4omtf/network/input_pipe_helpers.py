@@ -17,7 +17,13 @@ from nn4omtf.network.input_pipe_const import \
 
     
 
-def _deserialize(x, hits_type, out_len, out_class_bins):
+def _deserialize(
+        x, 
+        hits_type, 
+        out_len, 
+        out_class_bins, 
+        detect_no_signal=False,
+        remap_data=None):
     """Deserialize hits and convert pt value into categories using
     with one-hot encoding.
 
@@ -34,7 +40,8 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
         hits_type: hits type const from `HITS_TYPE`
         out_len: output one-hot tensor length
         bucket_fn: float value classifier function
-    
+        detect_no_signal: map events with no signal registered to special state
+
     Returns:
         data on single event which is 3-tuple containing:
             - selected hits array (HITS_REDUCED | HITS_FULL)
@@ -69,6 +76,7 @@ def _deserialize(x, hits_type, out_len, out_class_bins):
     examples = tf.parse_single_example(x, features)
 
     hits_arr = examples[hits]
+    # 
     prod_arr = examples[NPZ_FIELDS.PROD]
     omtf_arr = examples[NPZ_FIELDS.OMTF]
     pt_code = examples[NPZ_FIELDS.PT_CODE][0]

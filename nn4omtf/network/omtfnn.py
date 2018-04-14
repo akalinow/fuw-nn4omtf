@@ -197,7 +197,13 @@ class OMTFNN:
             y_sgn: output tensor (charge sign logits) of shape [None, 2] 
             pt_class: pt classes bins edges
             intype: input type of OMTFDataset format
+        NOTE:
+            `pt_class` list MUST begin with zero value!
+            It's requirement because network must have posibility to say 
+            "I don't knot" just because no signal was observed by detector.
+            And this case is in about 60% of all events!
         """
+        assert pt_class[0] == 0, "`pt` class bins array MUST begin with ZERO!"
         assert isinstance(x, tf.Tensor), "Input is not a tf.Tensor!"
         assert isinstance(y_pt, tf.Tensor), "pt output is not a tf.Tensor!"
         assert isinstance(y_sgn, tf.Tensor), "sgn output is not a tf.Tensor!"

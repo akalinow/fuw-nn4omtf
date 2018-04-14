@@ -6,20 +6,33 @@
 ## Done
 * Stopping training with keyboard interrupt
 
+## IN PROGRESS
+* Upgrade statistics collection
+        * Add extra softmax tensor at the end of net in `test` configuration
+        * gethering lots data in `test`; `valid` and `train` should be bare
+        * neuron activation analitycs
+                * generation of 3D historgram, -> neuron outputs over dataset, | probability, / pt code
+* cleanup `train` process 
+* [OMTFNN]
+        * Add additional bin for `NOT KNOWN` state (14-04-18)
+
+* [INPUT PIPE] 
+        * applying transformation to input data 
+* [NET BUILDER]
+        * utilities for auto generation of layers
+        * utils for normalization
 ## Required
 
 * add samples limits in `valid` and `test` process
 * record important only
 * record stats only in `valid` 
 * save data summaries in csv
+    - special tool should read and prepare correct plot
 * megre many summaries before adding to TB 
 
-* [IN PROGRESS] Upgrade statistics collection
 * store only few of all statistics in network...
 
-* Test and compare procedure
-	* Testing - done
-	* Comparing models - take data from test runs and generate report
+* Comparing models - take data from test runs and generate report
 
 * Analytics tools (at least for input)
 	* preview of weigths and activation patterns => understanding of learned features
@@ -34,11 +47,8 @@
 
 * utilities for:
     * showing up probabilities at the end
-    * utilities for auto generation of layers
-    * utils for normalization
 
 
-* neuron activation analitycs
 
 * tools for remembering venv paths and activating?
   * env autosetup??
