@@ -11,33 +11,44 @@ from IPython.display import clear_output, Image, display, HTML
 import numpy as np
 
 
-def weight_variable(shape, shape_in, name=None):
+def weights(shape, name=None):
     """Generates a weight variable of a given shape.
     Args:
         - shape: variable tensor shape
-        - shape_in: input data shape
         - name(optional): variable tensor name
     Returns:
         Variable tensor
     """
-    fanin = np.prod(shape_in)
-    stddev = np.square(2 / fanin)
+    cnt = np.prod(shape)
+    stddev = np.square(2 / cnt)
     initial = tf.truncated_normal(shape, stddev=stddev)
-    return tf.Variable(initial)
-
-
-def bias_variable(shape, shape_in, name=None):
-    """Generates a bias variable of a given shape.
-    NOTICE:
-        Constant initializaer... do not use it.
-    Args:
-        - shape: bias tensor shape
-        - name(optional): bias tensor name
-    Returns:
-        Bias variable tensor
-    """
-    initial = tf.constant(0.01, shape=shape)
     return tf.Variable(initial, name=name)
+
+
+def mk_fc_layer(x, sz, name_suffix="", act_fn=None):
+    """Create fully connected layer with batch normalization.
+    Args:
+        x: input tensor
+        sz: # of neurons in layer
+        name_suffix: suffix appended to layer name
+        act_fn: activation function applied to this layer
+    Returns:
+        Output tensor
+    """
+    eps = 0.0001 # Epsilon for numerical stability
+    name = "fc" if name_suffix == "" else "fc_" + name_suffix
+    w_shape = [x.shape[-1], sz]
+    with tf.name_scope(name):
+        w = weights(shape=w_shape, name="w")
+        f = tf.matmul(x, w)
+        mean, var = tf.nn.moments(f, axes=[0])
+        f_hat = (f - mean) / tf.sqrt(var + eps)
+        gamma = tf.Variable(tf.ones([sz]))
+        beta = tf.Variable(tf.zeros([sz]))
+        f_norm = gamma * f_hat + beta
+        if act_fn is not None:
+            return act_fn(f_norm)
+        return f_norm
 
 
 def add_summary(var, add_stddev=True, add_min=True, add_max=True, add_hist=True):
