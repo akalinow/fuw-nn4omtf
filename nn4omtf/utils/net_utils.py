@@ -37,7 +37,7 @@ def mk_fc_layer(x, sz, name_suffix="", act_fn=None):
     """
     eps = 0.0001 # Epsilon for numerical stability
     name = "fc" if name_suffix == "" else "fc_" + name_suffix
-    w_shape = [x.shape[-1], sz]
+    w_shape = [int(x.shape.dims[-1]), sz]
     with tf.name_scope(name):
         w = weights(shape=w_shape, name="w")
         f = tf.matmul(x, w)

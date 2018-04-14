@@ -61,7 +61,6 @@
     * interleave
        * cycle
        * reps
-* remove old net in existing directory (or ask)
 * outputing generated data to file (exact numbers, csv like?)
   * outputing levels?
     * rather binary format than ascii

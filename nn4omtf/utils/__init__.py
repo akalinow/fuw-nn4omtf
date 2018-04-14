@@ -1,7 +1,7 @@
 from nn4omtf.utils.net_utils import init_uninitialized_variables
 from nn4omtf.utils.net_utils import get_saved_model_from_file
 from nn4omtf.utils.net_utils import get_subgraph_by_scope, add_summary 
-from nn4omtf.utils.net_utils import bias_variable, weight_variable
+from nn4omtf.utils.net_utils import weights, mk_fc_layer
 from nn4omtf.utils.net_utils import float_feature
 from nn4omtf.utils.net_utils import signature_from_dict
 from nn4omtf.utils.net_utils import store_graph, save_string_as, jupyter_display 
