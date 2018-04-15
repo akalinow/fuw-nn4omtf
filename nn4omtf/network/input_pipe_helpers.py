@@ -10,12 +10,9 @@ import time
 import multiprocessing
 import tensorflow as tf
 
-from nn4omtf.dataset.const import NPZ_FIELDS, HITS_TYPE
-from nn4omtf.network.input_pipe_const import \
-    PIPE_MAPPING_TYPE, PIPE_EXTRA_DATA_NAMES
-
-
-    
+from nn4omtf.const import NPZ_FIELDS, HITS_TYPE, \
+        PIPE_MAPPING_TYPE, PIPE_EXTRA_DATA_NAMES
+from nn4omtf.network import OMTFNN
 
 def _deserialize(
         x, 
@@ -23,7 +20,8 @@ def _deserialize(
         out_len, 
         out_class_bins, 
         detect_no_signal=False,
-        remap_data=None):
+        remap_data=None,
+        is_training=False):
     """Deserialize hits and convert pt value into categories using
     with one-hot encoding.
 
@@ -44,7 +42,8 @@ def _deserialize(
                 It's used in `train` and `validation` phase.
         remap_data: tuple of (NULLVAL, SHIFT), put NULLVAL instead of 5400 and
                 shift all other values by SHIFT to the right.
-
+        is_training: boolean inicating phase in which pipe is used,
+                argument is passed in data dict
     Returns:
         data on single event which is 3-tuple containing:
             - selected hits array (HITS_REDUCED | HITS_FULL), transfored or not
@@ -147,12 +146,24 @@ def _deserialize(
         omtf_sgn_k
     ]
     edata_dict = dict([(k, v) for k, v in zip(PIPE_EXTRA_DATA_NAMES, vals)])
-    
-    return hits_arr, prod_pt_label, prod_sign_label, edata_dict
+    data_dict = {
+            OMTFNN.CONST.IN_HITS_NAME: hits_arr,
+            OMTFNN.CONST.IN_PHASE_NAME: is_training,
+            OMTFNN.CONST.OUT_PT_NAME: prod_pt_label,
+            OMTFNN.CONST.OUT_SGN_NAME: prod_sgn_label
+    }
+
+    return data_dict, edata_dict
 
 
-def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
-                          out_len, out_class_bins):
+def _new_tfrecord_dataset(
+        filename, 
+        compression, 
+        parallel_calls, 
+        in_type,
+        out_len, 
+        out_class_bins
+        is_training):
     """Creates new TFRecordsDataset as a result of map function.
     It's interleaved in #setup_input_pipe method as a base of lambda.
     Interleave takes filename tensor from filenames dataset and pass
@@ -167,6 +178,7 @@ def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
       in_type: input tensor type
       out_len: output one-hot tensor length
       bucket_fn: float value classifier function
+      is_training: boolean training phase indicator (see: _deserialize)
     """
     # TFRecords can be compressed initially. Pass `ZLIB` or `GZIP`
     # if compressed or `None` otherwise.
@@ -178,7 +190,8 @@ def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
     def map_fn(x): return _deserialize(x,
                                        hits_type=in_type,
                                        out_len=out_len,
-                                       out_class_bins=out_class_bins)
+                                       out_class_bins=out_class_bins,
+                                       is_training=is_training)
 
     # Additional options to pass in dataset.map
     # - num_threads
@@ -186,9 +199,17 @@ def _new_tfrecord_dataset(filename, compression, parallel_calls, in_type,
     return dataset.map(map_fn, num_parallel_calls=parallel_calls)
 
 
-def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
-                     batch_size=None, shuffle=False, reps=1, 
-                     mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE):
+def setup_input_pipe(
+        files_n, 
+        name, 
+        in_type, 
+        out_class_bins, 
+        compression_type,   
+        batch_size=None, 
+        shuffle=False, 
+        reps=1,             
+        mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE
+        is_training=False):
     """Create new input pipeline for given dataset.
 
     Args:
@@ -206,7 +227,7 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
         2-tuple (filenames placeholder, dataset iterator)
     """
     # Number of cores for parallel calls
-    cores_count = multiprocessing.cpu_count()
+    cores_count = max(multiprocessing.cpu_count() / 2, 1)
 
     with tf.name_scope(name):
         # File names as placeholder
@@ -227,20 +248,33 @@ def setup_input_pipe(files_n, name, in_type, out_class_bins, compression_type,
             parallel_calls=cores_count,
             in_type=in_type,
             out_len=out_len,
-            out_class_bins=out_class_bins)
+            out_class_bins=out_class_bins,
+            is_training=is_training)
 
         if mapping_type == PIPE_MAPPING_TYPE.INTERLEAVE:
             # Now create proper dataset with interleaved samples from each TFRecord
             # file. `interleave()` maps provided function which gets filename
             # and reads examples. They can be transformed. Results of map function
             # are interleaved in result dataset.
-            # 
+            #
+
+            ## 15.04.2018 JLysiak - due to changes in TF 1.7
             # I recommend read the docs for more information:
             # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#interleave
-            dataset = files_dataset.interleave(
-                map_func=map_fn,
-                cycle_length=files_n,  # Length of cycle - go through all files
-                block_length=1)       # One example from each input file in one cycle
+            #dataset = files_dataset.interleave(
+            #    map_func=map_fn,
+            #    cycle_length=files_n,  # Length of cycle - go through all files
+            #    block_length=1)       # One example from each input file in one cycle
+            
+            # Changing to parallel call
+            # For more dive into: https://www.tensorflow.org/api_docs/python/tf/contrib/data/parallel_interleave
+            dataset = files_dataset.apply(
+                    tf.contrib.data.parallel.interleave(
+                        map_func=map_fn,
+                        cycle_length=files_n,   # Length of cycle - go through all files
+                        block_length=1,         # One example from each input file in one cycle
+                        sloppy=True)            # Output don't have to be deterministic
+                    )
 
         elif mapping_type == PIPE_MAPPING_TYPE.FLAT_MAP:
             dataset = files_dataset.flat_map(map_func=map_fn)

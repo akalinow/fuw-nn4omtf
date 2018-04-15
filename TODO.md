@@ -2,19 +2,8 @@
 
 ## Notes
 - OMTF & NN results can be compared only for given set of bins
-
 - Initialization of variables
   - with batch normalization it is not the case anymore
-## Done
-* Stopping training with keyboard interrupt
-* [OMTFNN]
-  * Add additional requiremnt of special bin for `NOT KNOWN` state - `0`-pT bin edge
-  * Special `NOT KNOWN` state for sign - required in case when no signal was registered=
-* [INPUT PIPE] 
-  * applying transformation to input data 
-  * changed bucket-functions for `pt` and `sgn` data
-* [NET BUILDER]
-  * fully connected layer creator with batch normalization
 
 ## IN PROGRESS
 * Upgrade statistics collection
@@ -33,7 +22,7 @@
     - special tool should read and prepare correct plot
 * megre many summaries before adding to TB 
 
-* store only few of all statistics in network...
+* store only few of all statistics in network... (or make it smaller)
 
 * Comparing models - take data from test runs and generate report
 
@@ -55,12 +44,6 @@
   * in case of having good network and implementing it on fpga, it probably would be good idea to
     quantize states but... it's hard??
 
-* passing parameters in omtfrunner
-  * changing optimizer
-  * changing pipeline 
-    * interleave
-       * cycle
-       * reps
 * outputing generated data to file (exact numbers, csv like?)
   * outputing levels?
     * rather binary format than ascii

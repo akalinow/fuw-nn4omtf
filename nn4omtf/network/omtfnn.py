@@ -30,7 +30,8 @@ class OMTFNN:
         BUILD_FUN_NAME = "create_nn"
         GRAPH_SCOPE = 'omtfnn'
         MODEL_SIGNATURE = tf.saved_model.signature_constants.CLASSIFY_METHOD_NAME
-        IN_NAME = "IN"
+        IN_HITS_NAME = "HITS_IN"
+        IN_PHASE_NAME = "PHASE_IN"
         OUT_PT_NAME = "PT_OUT"
         OUT_SGN_NAME = "SGN_OUT"
         MODEL_DIR = "model"
@@ -231,9 +232,13 @@ class OMTFNN:
         """
         with tf.Graph().as_default() as g:
             with tf.name_scope(OMTFNN.CONST.GRAPH_SCOPE):
-                x, y_pt, y_sgn, pt_class, intype = builder_fn()
+                is_training_ph = tf.placeholder(tf.bool, name="phase")
+                x, y_pt, y_sgn, pt_class, intype = builder_fn(is_training_ph, 3)
                 OMTFNN._check_builder_results(x, y_pt, y_sgn, pt_class, intype)
-                inputs = {OMTFNN.CONST.IN_NAME: x}
+                inputs = {
+                    OMTFNN.CONST.IN_HITS_NAME: x,
+                    OMTFNN.CONST.IN_PHASE_NAME: is_training_ph
+                }
                 y_pt_out = tf.identity(y_pt, name=OMTFNN.CONST.OUT_PT_NAME)
                 y_sgn_out = tf.identity(y_sgn, name=OMTFNN.CONST.OUT_SGN_NAME)
                 outputs = {
@@ -288,16 +293,21 @@ class OMTFNN:
         export_path = os.path.join(self.path, OMTFNN.CONST.MODEL_DIR)
         meta = tf.saved_model.loader.load(sess=sess, tags=[], 
                 export_dir=export_path)
-        t_in_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].inputs[OMTFNN.CONST.IN_NAME]
-        t_pt_out_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[OMTFNN.CONST.OUT_PT_NAME]
-        t_sgn_out_info = meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[OMTFNN.CONST.OUT_SGN_NAME]
-        t_in = tf.saved_model.utils.get_tensor_from_tensor_info(
-            t_in_info, sess.graph)
-        t_pt_out = tf.saved_model.utils.get_tensor_from_tensor_info(
-            t_pt_out_info, sess.graph)
-        t_sgn_out = tf.saved_model.utils.get_tensor_from_tensor_info(
-            t_sgn_out_info, sess.graph)
-        return meta, t_in, t_pt_out, t_sgn_out
+        ins = [
+            OMTFNN.CONST.IN_HITS_NAME,
+            OMTFNN.CONST.IN_PHASE_NAME
+        ]
+        ous = [
+            OMTFNN.CONST.OUT_PT_NAME,
+            OMTFNN.CONST.OUT_SGN_NAME
+        ]
+        names = ins + ous
+        ins_infs = [meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].inputs[name] for name in ins]
+        ous_infs = [meta.signature_def[OMTFNN.CONST.MODEL_SIGNATURE].outputs[name] for name in ous]
+        infs = ins_infs + ous_infs
+        ts = [tf.saved_model.utils.get_tensor_from_tensor_info(inf, sess.graph) for inf in infs]
+        tsd = dict([(name, t) for name, t in zip(names, ts)])
+        return meta, tsd
 
 
     def finish(self):

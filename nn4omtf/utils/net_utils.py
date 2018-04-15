@@ -25,13 +25,15 @@ def weights(shape, name=None):
     return tf.Variable(initial, name=name)
 
 
-def mk_fc_layer(x, sz, name_suffix="", act_fn=None):
-    """Create fully connected layer with batch normalization.
+def mk_fc_layer(x, sz, name_suffix="", act_fn=None, is_training=None):
+    """Create fully connected layer with batch normalization or not.
     Args:
         x: input tensor
         sz: # of neurons in layer
         name_suffix: suffix appended to layer name
         act_fn: activation function applied to this layer
+        is_training: boolean placeholder for inicatining train 
+            and test/valid phase
     Returns:
         Output tensor
     """
@@ -41,44 +43,49 @@ def mk_fc_layer(x, sz, name_suffix="", act_fn=None):
     with tf.name_scope(name):
         w = weights(shape=w_shape, name="w")
         f = tf.matmul(x, w)
-        mean, var = tf.nn.moments(f, axes=[0])
-        f_hat = (f - mean) / tf.sqrt(var + eps)
-        gamma = tf.Variable(tf.ones([sz]))
-        beta = tf.Variable(tf.zeros([sz]))
-        f_norm = gamma * f_hat + beta
+        if is_training is not None:
+            f = tf.contrib.layers.batch_norm(f, 
+                    center=True, 
+                    scale=True, 
+                    is_training=is_training,
+                    scope="bn")
         if act_fn is not None:
-            return act_fn(f_norm)
-        return f_norm
+            return act_fn(f)
+        return f
 
 
 def add_summary(var, add_stddev=True, add_min=True, add_max=True, add_hist=True):
     """Append a lot of extra summary data to given tensor.
-
     Appends at least mean value of tensor. Other parameters can be switched off.
-
     Args:
         - var:  variable tensor
         - stddev(optional,default=True): add mean to summary
         - min(optional,default=True): add min to summary
         - max(optional,default=True): add max to summary
         - hist(optional,default=True): add hist to summary
+    Returns:
+        List of summary tensor operations
     """
+    ss = []
     with tf.name_scope('summary'):
         mean = tf.reduce_mean(var)
-        tf.summary.scalar('mean', mean)
+        s = tf.summary.scalar('mean', mean)
+        ss.append(s)
         if add_stddev:
             with tf.name_scope('stddev'):
                 stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-            tf.summary.scalar('stddev', stddev)
-
+            s = tf.summary.scalar('stddev', stddev)
+            ss.append(s)
         if add_max:
-            tf.summary.scalar('max', tf.reduce_max(var))
-
+            s = tf.summary.scalar('max', tf.reduce_max(var))
+            ss.append(s)
         if add_min:
-            tf.summary.scalar('min', tf.reduce_min(var))
-
+            s = tf.summary.scalar('min', tf.reduce_min(var))
+            ss.append(s)
         if add_hist:
-            tf.summary.histogram('histogram', var)
+            s = tf.summary.histogram('histogram', var)
+            ss.append(s)
+    return ss
 
 
 def get_subgraph_by_scope(graph_def, name_scope):

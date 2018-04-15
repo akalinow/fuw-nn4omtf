@@ -33,17 +33,20 @@ class OMTFRunner:
     """
 
     DEFAULT_PARAMS = {
-        "valid_batch_size": 10000,
+        "valid_batch_size": 1000,
         "batch_size": 1000,
         "sess_prefix": "",
         "shuffle": False,
         "acc_ival": 1000,
-        "get_meta_ival": 5000,
         "epochs": 1,
         "steps": -1,
         "logdir": None,
         "verbose": False,
-        "learning_rate": 0.001
+        "learning_rate": 0.001,
+        "shiftval": 600,
+        "nullval": 0,
+        "limit_valid_examples": None,
+        "limit_test_examples": None
     }
 
     def __init__(self, dataset, network, **kw):
@@ -165,19 +168,24 @@ class OMTFRunner:
                     out_class_bins=opt.out_class_bins,
                     batch_size=opt.batch_size,
                     shuffle=opt.shuffle,
-                    reps=opt.epochs)
+                    reps=opt.epochs,
+                    remap_data=(opt.nullval, opt.shiftval),
+                    detect_no_signal=True
+                    )
             valid_pipe = OMTFInputPipe(
                     dataset=self.dataset,
                     name='valid',
                     hits_type=opt.in_type,
                     batch_size=opt.valid_batch_size,
-                    out_class_bins=opt.out_class_bins)
-        
+                    out_class_bins=opt.out_class_bins,
+                    remap_data=(opt.nullval, opt.shiftval),
+                    detect_no_signal=True
+                    limit_examples=opt.limit_valid_examples)
         self.show_params()
 
         with tf.Session() as sess:
-            _, net_in, net_pt_out, net_sgn_out = self.network.restore(
-                    sess=sess, sess_name=opt.sess_name)
+            # Restore model and get I/O tensors
+            _, tsd = self.network.restore(sess=sess, sess_name=opt.sess_name)
 
             # Get collection of initialized variables
             init = sess.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
@@ -186,29 +194,26 @@ class OMTFRunner:
             # ==== NETWORK PLACEHOLDERS
             pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
                                     name="pt_labels")
-            sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
+            sgn_labels = tf.placeholder(tf.int8, shape=[None, 3],
                                     name="sgn_labels")
+            # ==== SETUP TRAINER NODES
+            logits_dict = {
+                    tsd[OMTFNN.CONST.OUT_PT_NAME]: pt_labels,
+                    tsd[OMTFNN.CONST.OUT_SGN_NAME]: sgn_labels
+            }
+            train_ops = setup_trainer(
+                    trainer_dict=logits_dict,
+                    learning_rate=opt.learning_rate)
+
+            acc_ops, summ_ops, _= setup_accuracy(acc_dict=logits_dict)
+
             net_pholders = [
-                net_in,
+                tsd[OMTFNN.CONST.IN_HTIS_NAME],
+                tsd[OMTFNN.CONST.IN_PHASE_NAME],
                 pt_labels,
                 sgn_labels
             ]
-
-            # ==== SETUP TRAINER NODES
-            pt_train_op, sgn_train_op = setup_trainer(
-                    net_pt_out=net_pt_out,
-                    net_sgn_out=net_sgn_out,
-                    labels_pt=pt_labels,
-                    labels_sgn=sgn_labels,
-                    learning_rate=opt.learning_rate)
-
-            pt_acc_op, sgn_acc_op, pt_class_op, sgn_class_op = setup_accuracy(
-                    net_pt_out=net_pt_out,
-                    net_sgn_out=net_sgn_out,
-                    pt_labels=pt_labels,
-                    sgn_labels=sgn_labels)
-
-            summary_op = tf.summary.merge_all()
+            # summary_op = tf.summary.merge_all()
 
             # At after all, initialize new nodes
             init_uninitialized_variables(sess, initialized=init)
@@ -218,8 +223,7 @@ class OMTFRunner:
                 valid_path = os.path.join(opt.logdir, opt.sess_name, 'valid')
                 train_path = os.path.join(opt.logdir, opt.sess_name, 'train')
                 valid_summary_writer = tf.summary.FileWriter(valid_path)
-                train_summary_writer = tf.summary.FileWriter(
-                    train_path, sess.graph)
+                train_summary_writer = tf.summary.FileWriter(train_path, sess.graph)
 
             i = 1            
             stamp = self._start_clock()
@@ -229,32 +233,15 @@ class OMTFRunner:
                 while i <= opt.steps or opt.steps < 0:
                     # Fetch next batch of input data and its labels
                     # Ignore extra data during trainings 
-                    train_data = train_pipe.fetch()
+                    data_dict, _ = train_pipe.fetch()
                     if train_data[0] is None:
                         vp("Train dataset is empty!")
                         break
 
                     # Prepare training feed dict
                     train_feed_dict = dict([(k, v) for k, v in zip(net_pholders, train_data[:-1])])
-
-                    # Configure extra options
-                    args = {
-                        'feed_dict': train_feed_dict,
-                        'options': None,
-                        'run_metadata': None
-                    }
-        
-                    if opt.get_meta_ival is not None:
-                        if i % opt.get_meta_ival == 0:
-                            args['options'] = tf.RunOptions(
-                                trace_level=tf.RunOptions.FULL_TRACE)
-                            args['run_metadata'] = tf.RunMetadata()
-                    
                     # Do mini-batch iteration
-                    summary, _, _ = sess.run(
-                        [summary_op, pt_train_op, sgn_train_op], 
-                        **args
-                    )
+                    sess.run(train_ops, feed_dict=train_feed_dict)
                     
                     # Save training logs for TensorBoard
                     if opt.logdir is not None:

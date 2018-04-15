@@ -11,21 +11,17 @@ from nn4omtf.network.statistics import OMTFStatistics
 from nn4omtf.network.stats_const import NN_CNAMES
 from nn4omtf.network.input_pipe_const import PIPE_EXTRA_DATA_NAMES
 
-def setup_trainer(net_pt_out, net_sgn_out, labels_pt, 
-        labels_sgn, learning_rate=1e-3):
+def setup_trainer(train_dict, learning_rate=1e-3):
     """Setup model trainer.
     @NOTE 23.03.18: added required sgn trainer
     Args:
-        net_pt_out: pt classes (logits) model output -> [p0,..,pk,..,pN]
-        net_sng_out: charge sign model output, 1-D vector -> [-, +]
-        labels_pt: pt labels to compare with
-        labels_sgn: charge sign labels
         learning_rate: just learning rate
     Returns:
         Train operation node
     """
     with tf.name_scope('trainer'):
         with tf.name_scope('loss'):
+            for logs, labs in zip(logits_list, labels_list)
             pt_cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
                 labels=labels_pt, logits=net_pt_out)
             pt_cross_entropy = tf.reduce_mean(pt_cross_entropy)
