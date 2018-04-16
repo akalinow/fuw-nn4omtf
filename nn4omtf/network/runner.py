@@ -19,7 +19,8 @@ from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 from nn4omtf.network.runner_helpers import collect_statistics,\
         setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
-from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES, PHASE_NAME
+from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES,\
+        PHASE_NAME, CNAMES
 
 
 class OMTFRunner:
@@ -46,7 +47,8 @@ class OMTFRunner:
         "shiftval": 600,
         "nullval": 0,
         "limit_valid_examples": None,
-        "limit_test_examples": None
+        "limit_test_examples": None,
+        "debug": False
     }
 
     def __init__(self, dataset, network, **kw):
@@ -246,7 +248,7 @@ class OMTFRunner:
                     # ======= TRAINING SECTION
                     # Fetch next batch of input data and its labels
                     # Ignore extra data during trainings 
-                    ddict, _ = train_pipe.fetch()
+                    ddict, edict = train_pipe.fetch()
                     if ddict is None:
                         vp("Train dataset is empty!")
                         break
@@ -254,10 +256,16 @@ class OMTFRunner:
                     # Prepare training feed dict
                     train_feed_dict = dict([(hdict[k], ddict[k]) for k in NN_HOLDERS_NAMES])
                     train_feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = True
-                    # Do mini-batch iteration
-                    _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
-                    for summ in train_summ:
-                        train_summary_writer.add_summary(summ, i)
+                    if opt.debug:
+                        _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
+                        if self.show_dbg(ddict, edict):
+                            vp("Exiting...")
+                            break
+                    else:
+                        # Do mini-batch iteration
+                        _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
+                        for summ in train_summ:
+                            train_summary_writer.add_summary(summ, i)
 
                     # ======= VALIDATION SECTION
                     if i % opt.acc_ival == 0:
@@ -398,3 +406,34 @@ class OMTFRunner:
             test_results.append(res)
         return test_results
 
+    def show_dbg(self, ddict, edict):
+        """Show step-by-step debugger screen"""
+        print("=================== DEBUGER")
+        dlen = len(ddict['HITS'])
+        for i in range(dlen):
+            print("======= HITS")
+            print(ddict['HITS'][i])
+            print("======= LABELS")
+            print("== PT")
+            print(ddict['PT_LABEL'][i])
+            print("== SIGN")
+            print(ddict['SIGN_LABEL'][i])
+            cols = list(edict.keys())
+            cols.pop() # remove vectors
+            cols.pop()
+            hfmt = ["{%s:^15}" % e for e in cols]
+            hfmt = " | ".join(hfmt) + "\n"
+            dfmt = ["{%s:>15.3}" % e for e in cols]
+            dfmt = " | ".join(dfmt) + "\n"
+            s = hfmt.format(**dict([(k, k) for k in cols]))
+            val_d = dict([(k, float(edict[k][i])) for k in cols])
+            s += dfmt.format(**val_d)
+            s += "\n"
+            print(s)
+            v = input("Next? [Y/n]")
+            if v == "n" or v == "N":
+                break
+        v = input("Continue debugging? [Y/n]")
+        if v == "n" or v == "N":
+            return True
+        return False
