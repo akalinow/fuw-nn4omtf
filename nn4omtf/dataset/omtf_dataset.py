@@ -11,7 +11,7 @@ import pickle
 import tensorflow as tf
 import numpy as np
 from nn4omtf.utils import load_dict_from_npz, float_feature
-from nn4omtf.dataset.const import NPZ_FIELDS
+from nn4omtf.const import NPZ_FIELDS
 
 
 class OMTFDataset:

@@ -9,7 +9,7 @@
 import tensorflow as tf
 from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network.input_pipe_helpers import setup_input_pipe
-from nn4omtf.const import PAHSE_NAME, PIPE_MAPPING_TYPE
+from nn4omtf.const import PHASE_NAME, PIPE_MAPPING_TYPE
 
 class OMTFInputPipe:
     """
@@ -44,7 +44,6 @@ class OMTFInputPipe:
         self.dataset = dataset
         filenames, files_n = self.dataset.get_dataset(name=name)
         self.filenames = filenames
-        is_training = True if name == PHASE_NAME.TRAIN else False
         placeholder, iterator = setup_input_pipe(
             files_n=files_n,
             name=name,
@@ -54,8 +53,7 @@ class OMTFInputPipe:
             batch_size=batch_size,
             shuffle=shuffle,
             reps=reps,
-            mapping_type=mapping_type,
-            is_training=is_training)
+            mapping_type=mapping_type)
 
         self.placeholder = placeholder
         self.iterator = iterator

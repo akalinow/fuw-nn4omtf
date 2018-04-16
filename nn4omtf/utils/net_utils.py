@@ -47,8 +47,7 @@ def mk_fc_layer(x, sz, name_suffix="", act_fn=None, is_training=None):
             f = tf.contrib.layers.batch_norm(f, 
                     center=True, 
                     scale=True, 
-                    is_training=is_training,
-                    scope="bn")
+                    is_training=is_training)
         if act_fn is not None:
             return act_fn(f)
         return f

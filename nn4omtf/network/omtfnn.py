@@ -16,7 +16,7 @@ import re
 import shutil 
 
 import nn4omtf.utils as utils
-from nn4omtf.dataset.const import HITS_TYPE
+from nn4omtf.const import HITS_TYPE
 
 
 class OMTFNN:

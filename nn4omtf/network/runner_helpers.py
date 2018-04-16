@@ -8,70 +8,89 @@
 
 import tensorflow as tf
 from nn4omtf.network.statistics import OMTFStatistics
-from nn4omtf.network.stats_const import NN_CNAMES
-from nn4omtf.network.input_pipe_const import PIPE_EXTRA_DATA_NAMES
+from nn4omtf.const import NN_CNAMES, PIPE_EXTRA_DATA_NAMES
 
-def setup_trainer(train_dict, learning_rate=1e-3):
+def setup_trainer(train_list, learning_rate=1e-3):
     """Setup model trainer.
     @NOTE 23.03.18: added required sgn trainer
     Args:
+        train_list: (name, logits, labels) list
         learning_rate: just learning rate
     Returns:
-        Train operation node
+        - Train operation nodes list
+        - Summaries with cross-entropy
     """
+    train_ops = []
+    summ_ops = []
     with tf.name_scope('trainer'):
-        with tf.name_scope('loss'):
-            for logs, labs in zip(logits_list, labels_list)
-            pt_cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
-                labels=labels_pt, logits=net_pt_out)
-            pt_cross_entropy = tf.reduce_mean(pt_cross_entropy)
-            
-            sgn_cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
-                labels=labels_sgn, logits=net_sgn_out)
-            sgn_cross_entropy = tf.reduce_mean(sgn_cross_entropy)
-        
-        tf.summary.scalar('pt_cross_entropy', pt_cross_entropy)
-        tf.summary.scalar('sgn_cross_entropy', sgn_cross_entropy)
-
-        with tf.name_scope('optimizer'):
-            pt_train_step = tf.train.AdamOptimizer(
-                learning_rate=learning_rate).minimize(pt_cross_entropy)
-            sgn_train_step = tf.train.AdamOptimizer(
-                learning_rate=learning_rate).minimize(sgn_cross_entropy)
-    return pt_train_step, sgn_train_step
+        for name, logits, labels in train_list:
+            with tf.name_scope('loss_' + name):
+                cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
+                    labels=labels, logits=logits)
+                cross_entropy = tf.reduce_mean(cross_entropy)
+                s = tf.summary.scalar('cross_entropy', cross_entropy)
+            with tf.name_scope('optimizer'):
+                train_step = tf.train.AdamOptimizer(
+                    learning_rate=learning_rate).minimize(cross_entropy)
+            train_ops.append(train_step)
+            summ_ops.append(s)
+    return train_ops, summ_ops
 
 
-def setup_accuracy(net_pt_out, net_sgn_out, pt_labels, sgn_labels):
-    """Setup accuracy mesuring subgraph
-    @NOTE 23.03.18: added signs labels
+def setup_metrics(logits_list):
+    """Setup metrics collection ops for network.
     Args:
-        net_pt_out: pt labels predicted
-        net_sgn_out: charge sign predicted
-        pt_labels: pt ground truth labels
-        sgn_labels: charge sign class ground truth
+        logits_list: (name, logits, labels) list
     Returns:
-        Accuracy nodes
+        - List of tuples each input element:
+         (name, predicted class, metrics op, metrics update op, summary op)
+        - variables initializer
     """
+    res = []
+    andop = []
+    running_vars = []
     with tf.name_scope('accuracy'):
-        net_pt_class_out = tf.argmax(net_pt_out, 1)
-        pt_correct_prediction = tf.equal(
-                net_pt_class_out, 
-                tf.argmax(pt_labels, 1))
+        for name, logits, labels in logits_list:
+            with tf.name_scope(name):
+                class_out = tf.argmax(logits, 1)
+                class_true = tf.argmax(labels, 1)            
+                correct = tf.equal(class_out, class_true)
+                andop.append(correct)
+                metric_op, metric_update_op = tf.metrics.accuracy(
+                        class_out, 
+                        class_true, 
+                        name="metrics")
+                for el in tf.get_collection(
+                            tf.GraphKeys.LOCAL_VARIABLES, 
+                            scope='accuracy/' + name + "/metrics"):
+                    running_vars.append(el)
+                summ = tf.summary.scalar('acc', metric_op)
+                res.append((name, class_out, metric_op, metric_update_op, summ))
 
-        net_sgn_class_out = tf.argmax(net_sgn_out, 1)
-        sgn_correct_prediction = tf.equal(
-                net_sgn_class_out, 
-                tf.argmax(sgn_labels, 1))
+        with tf.name_scope('all'):
+            comm = andop[0]
+            for t in andop[1:]:
+                comm = tf.logical_and(comm, t)
+            comm_f = tf.cast(comm, tf.float32)
+            metric_op, metric_update_op = tf.metrics.mean(comm_f, name="metrics")
+            summ = tf.summary.scalar('acc', metric_op)
+            res.append(('all', None, metric_op, metric_update_op, summ))
+            for el in tf.get_collection(
+                        tf.GraphKeys.LOCAL_VARIABLES, 
+                        scope="accuracy/all/metrics"):
+                    running_vars.append(el)
+    with tf.name_scope('cnt'):
+        cnt_op, cnt_update_op = tf.contrib.metrics.count(comm_f, name="metrics")
+        res.append(('count', None, cnt_op, cnt_update_op, None))
+        for el in tf.get_collection(
+                    tf.GraphKeys.LOCAL_VARIABLES, 
+                    scope="cnt/metrics"):
+            running_vars.append(el)
 
-        pt_correct_prediction = tf.cast(pt_correct_prediction, tf.float32)
-        sgn_correct_prediction = tf.cast(sgn_correct_prediction, tf.float32)
-
-        pt_accuracy = tf.reduce_mean(pt_correct_prediction)
-        sgn_accuracy = tf.reduce_mean(sgn_correct_prediction)
-        tf.summary.scalar('pt_accuracy', pt_accuracy)
-        tf.summary.scalar('sgn_accuracy', sgn_accuracy)
-    return pt_accuracy, sgn_accuracy, net_pt_class_out, net_sgn_class_out
-
+    for var in running_vars:
+        print(var)
+    initializer = tf.variables_initializer(var_list=running_vars)
+    return res, initializer
 
 def collect_statistics(
         sess,           # Session

@@ -17,9 +17,9 @@ from nn4omtf.network import OMTFNN
 from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 
 from nn4omtf.network.runner_helpers import collect_statistics,\
-        setup_accuracy, setup_trainer
+        setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
-from nn4omtf.network.input_pipe_const import PIPE_EXTRA_DATA_NAMES
+from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES, PHASE_NAME
 
 
 class OMTFRunner:
@@ -81,12 +81,12 @@ class OMTFRunner:
         self.params = params
 
 
-    def _get_verbose_printer(self):
+    def _get_verbose_printer(self, lvl=1):
         """Get verbose printer.
         Returns:
             Lambda which prints out its argument if verbose flag is set
         """
-        vp = lambda s: print("OMTFRunner: " + s) if self.params['verbose'] else None
+        vp = lambda s: print("OMTFRunner: " + s) if self.params['verbose'] >= lvl else None
         return vp
 
 
@@ -154,7 +154,9 @@ class OMTFRunner:
         self._update_params(kw)
         opt = dict_to_object(self.params)
         opt.sess_name += "/train"
-        vp = self._get_verbose_printer()
+        vp = self._get_verbose_printer(lvl=1)
+        vvp = self._get_verbose_printer(lvl=2)
+        vvvp = self._get_verbose_printer(lvl=1)
 
         tf.reset_default_graph()
         vp("Preparing training session: %s" % opt.sess_name)
@@ -163,7 +165,7 @@ class OMTFRunner:
             # Input pipes configuration
             train_pipe = OMTFInputPipe(
                     dataset=self.dataset,
-                    name='train',
+                    name=PHASE_NAME.TRAIN,
                     hits_type=opt.in_type,
                     out_class_bins=opt.out_class_bins,
                     batch_size=opt.batch_size,
@@ -174,12 +176,12 @@ class OMTFRunner:
                     )
             valid_pipe = OMTFInputPipe(
                     dataset=self.dataset,
-                    name='valid',
+                    name=PHASE_NAME.VALID,
                     hits_type=opt.in_type,
                     batch_size=opt.valid_batch_size,
                     out_class_bins=opt.out_class_bins,
                     remap_data=(opt.nullval, opt.shiftval),
-                    detect_no_signal=True
+                    detect_no_signal=True,
                     limit_examples=opt.limit_valid_examples)
         self.show_params()
 
@@ -197,22 +199,32 @@ class OMTFRunner:
             sgn_labels = tf.placeholder(tf.int8, shape=[None, 3],
                                     name="sgn_labels")
             # ==== SETUP TRAINER NODES
-            logits_dict = {
-                    tsd[OMTFNN.CONST.OUT_PT_NAME]: pt_labels,
-                    tsd[OMTFNN.CONST.OUT_SGN_NAME]: sgn_labels
-            }
-            train_ops = setup_trainer(
-                    trainer_dict=logits_dict,
-                    learning_rate=opt.learning_rate)
-
-            acc_ops, summ_ops, _= setup_accuracy(acc_dict=logits_dict)
-
-            net_pholders = [
-                tsd[OMTFNN.CONST.IN_HTIS_NAME],
-                tsd[OMTFNN.CONST.IN_PHASE_NAME],
-                pt_labels,
-                sgn_labels
+            logits_list = [
+                    ("pt", tsd[OMTFNN.CONST.OUT_PT_NAME], pt_labels),
+                    ("sgn", tsd[OMTFNN.CONST.OUT_SGN_NAME], sgn_labels)
             ]
+            # Get update operation tensors for batch normalization
+            # and make statistics updating during training
+            # More info? See this:
+            # https://www.tensorflow.org/api_docs/python/tf/contrib/layers/batch_norm
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                train_ops, train_summ_ops = setup_trainer(
+                        train_list=logits_list,
+                        learning_rate=opt.learning_rate)
+
+            ops, metrics_init = setup_metrics(logits_list=logits_list)
+            metrics_ops = [op for _, _, op, _, _ in ops]
+            metrics_ups = [up for _, _, _, up, _ in ops]
+            metrics_summ = [s for _, _, _, _, s in ops]
+            cnt_op = metrics_ops[-1]
+
+            holders = [
+                tsd[OMTFNN.CONST.IN_HITS_NAME],
+                sgn_labels,
+                pt_labels
+            ]
+            hdict = dict([(k, v) for k, v in zip(NN_HOLDERS_NAMES, holders)])
             # summary_op = tf.summary.merge_all()
 
             # At after all, initialize new nodes
@@ -220,8 +232,8 @@ class OMTFRunner:
             train_pipe.initialize(sess)
 
             if opt.logdir is not None:
-                valid_path = os.path.join(opt.logdir, opt.sess_name, 'valid')
-                train_path = os.path.join(opt.logdir, opt.sess_name, 'train')
+                valid_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.VALID)
+                train_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.TRAIN)
                 valid_summary_writer = tf.summary.FileWriter(valid_path)
                 train_summary_writer = tf.summary.FileWriter(train_path, sess.graph)
 
@@ -231,60 +243,50 @@ class OMTFRunner:
            
             try:
                 while i <= opt.steps or opt.steps < 0:
+                    # ======= TRAINING SECTION
                     # Fetch next batch of input data and its labels
                     # Ignore extra data during trainings 
-                    data_dict, _ = train_pipe.fetch()
-                    if train_data[0] is None:
+                    ddict, _ = train_pipe.fetch()
+                    if ddict is None:
                         vp("Train dataset is empty!")
                         break
-
+                    vvp("Training step: {step}".format(step=i))
                     # Prepare training feed dict
-                    train_feed_dict = dict([(k, v) for k, v in zip(net_pholders, train_data[:-1])])
+                    train_feed_dict = dict([(hdict[k], ddict[k]) for k in NN_HOLDERS_NAMES])
+                    train_feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = True
                     # Do mini-batch iteration
-                    sess.run(train_ops, feed_dict=train_feed_dict)
-                    
-                    # Save training logs for TensorBoard
-                    if opt.logdir is not None:
-                        train_summary_writer.add_summary(summary, i)
-                        if args['options'] is not None:
-                            train_summary_writer.add_run_metadata(
-                                args['run_metadata'], "step-%d" % i)
+                    _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
+                    for summ in train_summ:
+                        train_summary_writer.add_summary(summ, i)
+
+                    # ======= VALIDATION SECTION
+                    if i % opt.acc_ival == 0:
+                        vp("Validation @ step {step}".format(step=i))
+                        sess.run(metrics_init)
+                        valid_pipe.initialize(sess)
+                        ex_cnt = 0
+                        while True:
+                            vvp("Examples processed: %d" % ex_cnt)
+                            vdict, edict = valid_pipe.fetch()
+                            if vdict is None:
+                                break
+                            # Prepare training feed dict
+                            valid_feed_dict = dict([(hdict[k], vdict[k]) for k in NN_HOLDERS_NAMES])
+                            valid_feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = False
+                            sess.run(metrics_ups, feed_dict=valid_feed_dict)
+                            ex_cnt = sess.run(cnt_op)
+                            if opt.limit_valid_examples is not None:
+                                if opt.limit_valid_examples <= ex_cnt:
+                                    break
+                        accs = sess.run(metrics_ops)
+                        for x, y in zip(ops, accs):
+                            print(x[0], y)
 
                     self._next_tick()
-                    if i % opt.acc_ival == 0:
-                        summaries, acc_d, nn_stats = collect_statistics(
-                                sess=sess,
-                                sess_name=opt.sess_name,
-                                pipe=valid_pipe,            # test using valid set
-                                net_pholders=net_pholders,  # net placeholders
-                                net_pt_out=net_pt_out,      # pt logits out
-                                net_sgn_out=net_sgn_out,    # sgn logits out
-                                net_pt_class=pt_class_op,   # pt class out
-                                net_sgn_class=sgn_class_op, # sgn class out
-                                pt_acc=pt_acc_op, 
-                                sgn_acc=sgn_acc_op,
-                                summary_op=summary_op)      # summary operator
-                        
-                        nn_stats.set_bins(opt.out_class_bins)
-
-                        if opt.logdir is not None:
-                            for s in summaries:
-                                valid_summary_writer.add_summary(s, i)
-                        
-                        self.network.add_summaries(summaries, i)
-                        self.network.add_log(acc_d, i, opt.sess_name)
-                        self.network.add_statistics(nn_stats)
-                        
-                        stamp = self._next_tick()
-                        vp("Validation @ step {step}".format(step=i))
-                        vp("Now: {datetime}, elapsed: {elapsed:.1f} sec.".format(**stamp))
-                        vp("Validation run took: {last:.1f} sec.".format(**stamp))
-                        vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
-                            **acc_d))
-
                     i += 1
+
             except KeyboardInterrupt:
-                print("Training stopped by user!")
+                vp("Training stopped by user!")
                 
             # End of main while loop, training finished
             stamp = self._next_tick()

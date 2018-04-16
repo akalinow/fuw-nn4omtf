@@ -49,6 +49,7 @@
     * rather binary format than ascii
     * eventualy converter in tools to generate cvs
 
+* repair preview.html (BN scopes)
 
 ## NICE TO HAVE
 

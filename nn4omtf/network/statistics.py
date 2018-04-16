@@ -6,7 +6,7 @@
     Statistics collector 
 """
 
-from nn4omtf.network.stats_const import CNAMES, NN_CNAMES
+from nn4omtf.const import CNAMES, NN_CNAMES
 import numpy as np
 import matplotlib.pyplot as plt
 
