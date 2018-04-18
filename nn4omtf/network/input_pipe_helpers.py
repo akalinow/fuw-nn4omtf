@@ -74,16 +74,17 @@ def _deserialize(
     hits_arr = examples[hits]
     if remap_data is not None:
         nullval, shift = remap_data
+        print(remap_data)
         transform_fn = lambda x: np.where(x == 5400, nullval, x + shift)
         hits_arr = tf.py_func(transform_fn,
                             [hits_arr],
-                            tf.int64,
+                            tf.float32,
                             stateful=False,
                             name='input_data_transformation')
     if detect_no_signal:
         mean = tf.py_func(np.mean,
                             [hits_arr],
-                            tf.int64,
+                            tf.float32,
                             stateful=False,
                             name='input_data_mean')
         no_signal = mean >= 5399
@@ -102,7 +103,7 @@ def _deserialize(
 
     # ======= TRAINING DATA
     # Prepare production pt labels
-    if no_signal:
+    if no_signal == True:
         prod_pt_k = 0
         prod_sgn_k = 0
     else:
@@ -158,7 +159,9 @@ def _new_tfrecord_dataset(
         parallel_calls, 
         in_type,
         out_len, 
-        out_class_bins):
+        out_class_bins,
+        detect_no_signal=False,
+        remap_data=None):
     """Creates new TFRecordsDataset as a result of map function.
     It's interleaved in #setup_input_pipe method as a base of lambda.
     Interleave takes filename tensor from filenames dataset and pass
@@ -184,7 +187,9 @@ def _new_tfrecord_dataset(
     def map_fn(x): return _deserialize(x,
                                        hits_type=in_type,
                                        out_len=out_len,
-                                       out_class_bins=out_class_bins)
+                                       out_class_bins=out_class_bins,
+                                       remap_data=remap_data,
+                                       detect_no_signal=detect_no_signal)
 
     # Additional options to pass in dataset.map
     # - num_threads
@@ -201,7 +206,9 @@ def setup_input_pipe(
         batch_size=None, 
         shuffle=False, 
         reps=1,             
-        mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE):
+        mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE,
+        detect_no_signal=False,
+        remap_data=None):
     """Create new input pipeline for given dataset.
 
     Args:
@@ -240,7 +247,10 @@ def setup_input_pipe(
             parallel_calls=cores_count,
             in_type=in_type,
             out_len=out_len,
-            out_class_bins=out_class_bins)
+            out_class_bins=out_class_bins,
+            detect_no_signal=detect_no_signal,
+            remap_data=remap_data
+            )
 
         if mapping_type == PIPE_MAPPING_TYPE.INTERLEAVE:
             # Now create proper dataset with interleaved samples from each TFRecord

@@ -17,13 +17,18 @@ def setup_trainer(train_list, learning_rate=1e-3):
         train_list: (name, logits, labels) list
         learning_rate: just learning rate
     Returns:
+        - names
         - Train operation nodes list
         - Summaries with cross-entropy
+        - values of cross entropy
     """
+    names = []
     train_ops = []
     summ_ops = []
+    values = []
     with tf.name_scope('trainer'):
         for name, logits, labels in train_list:
+            names.append(name)
             with tf.name_scope('loss_' + name):
                 cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
                     labels=labels, logits=logits)
@@ -34,7 +39,8 @@ def setup_trainer(train_list, learning_rate=1e-3):
                     learning_rate=learning_rate).minimize(cross_entropy)
             train_ops.append(train_step)
             summ_ops.append(s)
-    return train_ops, summ_ops
+            values.append(cross_entropy)
+    return names, train_ops, summ_ops, values
 
 
 def setup_metrics(logits_list):
@@ -86,9 +92,6 @@ def setup_metrics(logits_list):
                     tf.GraphKeys.LOCAL_VARIABLES, 
                     scope="cnt/metrics"):
             running_vars.append(el)
-
-    for var in running_vars:
-        print(var)
     initializer = tf.variables_initializer(var_list=running_vars)
     return res, initializer
 

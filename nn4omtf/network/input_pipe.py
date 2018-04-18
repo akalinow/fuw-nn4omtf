@@ -53,7 +53,9 @@ class OMTFInputPipe:
             batch_size=batch_size,
             shuffle=shuffle,
             reps=reps,
-            mapping_type=mapping_type)
+            mapping_type=mapping_type,
+            detect_no_signal=detect_no_signal,
+            remap_data=remap_data)
 
         self.placeholder = placeholder
         self.iterator = iterator

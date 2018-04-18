@@ -211,14 +211,14 @@ class OMTFRunner:
             # https://www.tensorflow.org/api_docs/python/tf/contrib/layers/batch_norm
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
-                train_ops, train_summ_ops = setup_trainer(
+                train_names, train_ops, train_summ_ops, train_vals = setup_trainer(
                         train_list=logits_list,
                         learning_rate=opt.learning_rate)
 
             ops, metrics_init = setup_metrics(logits_list=logits_list)
             metrics_ops = [op for _, _, op, _, _ in ops]
             metrics_ups = [up for _, _, _, up, _ in ops]
-            metrics_summ = [s for _, _, _, _, s in ops]
+            metrics_summ = [s for _, _, _, _, s in ops if s is not None]
             cnt_op = metrics_ops[-1]
 
             holders = [
@@ -237,7 +237,7 @@ class OMTFRunner:
                 valid_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.VALID)
                 train_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.TRAIN)
                 valid_summary_writer = tf.summary.FileWriter(valid_path)
-                train_summary_writer = tf.summary.FileWriter(train_path, sess.graph)
+                train_summary_writer = tf.summary.FileWriter(train_path) #, sess.graph)
 
             i = 1            
             stamp = self._start_clock()
@@ -252,21 +252,28 @@ class OMTFRunner:
                     if ddict is None:
                         vp("Train dataset is empty!")
                         break
-                    vvp("Training step: {step}".format(step=i))
                     # Prepare training feed dict
                     train_feed_dict = dict([(hdict[k], ddict[k]) for k in NN_HOLDERS_NAMES])
                     train_feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = True
                     if opt.debug:
-                        _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
+                        _, train_summ, train_ent = sess.run(
+                                [train_ops, train_summ_ops, train_vals], 
+                                feed_dict=train_feed_dict)
                         if self.show_dbg(ddict, edict):
                             vp("Exiting...")
                             break
                     else:
                         # Do mini-batch iteration
-                        _, train_summ = sess.run([train_ops, train_summ_ops], feed_dict=train_feed_dict)
-                        for summ in train_summ:
-                            train_summary_writer.add_summary(summ, i)
-
+                        _, train_summ, train_ent = sess.run(
+                                [train_ops, train_summ_ops, train_vals], 
+                                feed_dict=train_feed_dict)
+                        if opt.logdir is not None:
+                            for summ in train_summ:
+                                train_summary_writer.add_summary(summ, i)
+                    vvp("Training step: {step}\nCross entropy PT: {pt}\nCross entropy SGN: {sgn}".format(
+                                step=i,
+                                pt=train_ent[0],
+                                sgn=train_ent[1]))
                     # ======= VALIDATION SECTION
                     if i % opt.acc_ival == 0:
                         vp("Validation @ step {step}".format(step=i))
@@ -286,7 +293,10 @@ class OMTFRunner:
                             if opt.limit_valid_examples is not None:
                                 if opt.limit_valid_examples <= ex_cnt:
                                     break
-                        accs = sess.run(metrics_ops)
+                        accs, summs = sess.run([metrics_ops, metrics_summ])
+                        if opt.logdir is not None:
+                            for summ in summs:
+                                valid_summary_writer.add_summary(summ, i)
                         for x, y in zip(ops, accs):
                             print(x[0], y)
 
