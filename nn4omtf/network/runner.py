@@ -41,14 +41,15 @@ class OMTFRunner:
         "acc_ival": 1000,
         "epochs": 1,
         "steps": -1,
-        "logdir": None,
+        "logdir": '.',
         "verbose": False,
         "learning_rate": 0.001,
         "shiftval": 600,
         "nullval": 0,
         "limit_valid_examples": None,
         "limit_test_examples": None,
-        "debug": False
+        "debug": False,
+        "log": 'none'
     }
 
     def __init__(self, dataset, network, **kw):
@@ -82,6 +83,65 @@ class OMTFRunner:
             params[k] = v
         self.params = params
 
+    def _log_init(self):
+        self.log_hnd = {
+                PHASE_NAME.TRAIN: None,
+                PHASE_NAME.VALID: None,
+                PHASE_NAME.TEST: None
+        }
+        self.writers = self.log_hnd.copy()
+        fname = os.path.join(self.params['logdir'], self.params['sess_name'])
+        os.makedirs(fname)
+        if self.params['log'] in ['txt', 'both']:
+            if self.params['phase'] == PHASE_NAME.TRAIN:
+                tname = os.path.join(fname,'train.txt')
+                vname = os.path.join(fname,'valid.txt')
+                tf = open(tname, 'w')
+                vf = open(vname, 'w')
+                self.log_hnd[PHASE_NAME.TRAIN] = tf
+                self.log_hnd[PHASE_NAME.VALID] = vf
+                tf.write(self._params_string())
+                vf.write(self._params_string())
+                
+            else:
+                tname = os.path.join(fname, 'test.txt')
+                self.log_hnd[PHASE_NAME.TEST] = open(tname, 'w')
+
+        if self.params['log'] in ['tb', 'both']:
+            if self.params['phase'] == PHASE_NAME.TRAIN:
+                tname = os.path.join(fname, PHASE_NAME.TRAIN)
+                vname = os.path.join(fname, PHASE_NAME.VALID)
+                self.writers[PHASE_NAME.TRAIN] = tf.summary.FileWriter(tname)
+                self.writers[PHASE_NAME.VALID] = tf.summary.FileWriter(vname)
+            else:
+                tname = os.path.join(fname, PHASE_NAME.TEST)
+                self.writers[PHASE_NAME.TEST] = tf.summary.FileWriter(tname)
+
+    
+    def log(self, phase, step, data):
+        f = self.log_hnd[phase]
+        if f is None:
+            return
+        timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
+        f.write(timestamp + " @ " +str(step) + ": ")
+        for n, d in data:
+            f.write(n + "=" + str(d) + ", ")
+        f.write('\n')
+        f.flush()
+
+
+    def log_summary(self, phase, step, summs):
+        writer = self.writers[phase]
+        if writer is None:
+            return
+        for summ in summs:
+            writer.add_summary(summ, step)
+
+    def _log_deinit(self):
+        for k, v in self.log_hnd.items():
+            if v is not None:
+                v.close()
+
 
     def _get_verbose_printer(self, lvl=1):
         """Get verbose printer.
@@ -99,8 +159,7 @@ class OMTFRunner:
         Note that some values (like session name) won't be updated.
         """
         for k, v in params_dict.items():
-            if k in self.params:
-                self.params[k] = v
+            self.params[k] = v
 
 
     def _start_clock(self):
@@ -139,10 +198,14 @@ class OMTFRunner:
 
 
     def show_params(self):
-        print("==== OMTFRunner configuration")
+        print(self._params_string)
+
+    def _params_string(self):
+        r = "==== OMTFRunner configuration\n"
         for k, v in self.params.items():
-            print("> {:.<20}:{}".format(k, v))
-        print("=============================")
+            r += "> {:.<20}:{}\n".format(k, v)
+        r += "=============================\n"
+        return r
 
 
     def train(self, **kw):
@@ -153,9 +216,11 @@ class OMTFRunner:
         Args:
             **kw: additional args which can update previously set params
         """
+        kw['phase'] = PHASE_NAME.TRAIN
         self._update_params(kw)
+        self._log_init()
         opt = dict_to_object(self.params)
-        opt.sess_name += "/train"
+        # opt.sess_name += "/train"
         vp = self._get_verbose_printer(lvl=1)
         vvp = self._get_verbose_printer(lvl=2)
         vvvp = self._get_verbose_printer(lvl=1)
@@ -219,6 +284,7 @@ class OMTFRunner:
             metrics_ops = [op for _, _, op, _, _ in ops]
             metrics_ups = [up for _, _, _, up, _ in ops]
             metrics_summ = [s for _, _, _, _, s in ops if s is not None]
+            names = [x[0] for x in ops]
             cnt_op = metrics_ops[-1]
 
             holders = [
@@ -232,13 +298,7 @@ class OMTFRunner:
             # At after all, initialize new nodes
             init_uninitialized_variables(sess, initialized=init)
             train_pipe.initialize(sess)
-
-            if opt.logdir is not None:
-                valid_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.VALID)
-                train_path = os.path.join(opt.logdir, opt.sess_name, PHASE_NAME.TRAIN)
-                valid_summary_writer = tf.summary.FileWriter(valid_path)
-                train_summary_writer = tf.summary.FileWriter(train_path) #, sess.graph)
-
+            
             i = 1            
             stamp = self._start_clock()
             vp("{start_datetime} - training started".format(**stamp))
@@ -267,9 +327,8 @@ class OMTFRunner:
                         _, train_summ, train_ent = sess.run(
                                 [train_ops, train_summ_ops, train_vals], 
                                 feed_dict=train_feed_dict)
-                        if opt.logdir is not None:
-                            for summ in train_summ:
-                                train_summary_writer.add_summary(summ, i)
+                    self.log_summary(PHASE_NAME.TRAIN, i, train_summ)
+                    self.log(PHASE_NAME.TRAIN, i, zip(['cross-pt', 'cross-sgn'], train_ent))
                     vvp("Training step: {step}\nCross entropy PT: {pt}\nCross entropy SGN: {sgn}".format(
                                 step=i,
                                 pt=train_ent[0],
@@ -294,11 +353,10 @@ class OMTFRunner:
                                 if opt.limit_valid_examples <= ex_cnt:
                                     break
                         accs, summs = sess.run([metrics_ops, metrics_summ])
-                        if opt.logdir is not None:
-                            for summ in summs:
-                                valid_summary_writer.add_summary(summ, i)
-                        for x, y in zip(ops, accs):
-                            print(x[0], y)
+                        self.log_summary(PHASE_NAME.VALID, i, summs)
+                        self.log(PHASE_NAME.VALID, i, zip(names, accs))
+                        for x, y in zip(names, accs):
+                            print(x, y)
 
                     self._next_tick()
                     i += 1
@@ -316,6 +374,7 @@ class OMTFRunner:
             self.network.finish()
             self.network.save()
             vp("Model saved!")
+            self._log_deinit()
 
 
     def test(self, **kw):
