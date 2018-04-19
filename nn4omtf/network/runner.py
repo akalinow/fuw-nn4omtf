@@ -34,6 +34,7 @@ class OMTFRunner:
     """
 
     DEFAULT_PARAMS = {
+        "detect_no_signal": False,
         "valid_batch_size": 1000,
         "batch_size": 1000,
         "sess_prefix": "",
@@ -220,7 +221,6 @@ class OMTFRunner:
         self._update_params(kw)
         self._log_init()
         opt = dict_to_object(self.params)
-        # opt.sess_name += "/train"
         vp = self._get_verbose_printer(lvl=1)
         vvp = self._get_verbose_printer(lvl=2)
         vvvp = self._get_verbose_printer(lvl=3)
@@ -390,13 +390,12 @@ class OMTFRunner:
         """Test loaded model on test dataset.
         Args:
             **kw: additional args which can update previously set params
-        Returns:
-            Short dict-summary from whole run.
         """
+        kw['phase'] = PHASE_NAME.TEST
         self._update_params(kw)
         opt = dict_to_object(self.params)
-        opt.sess_name += "/test"
-        vp = self._get_verbose_printer()
+        vp = self._get_verbose_printer(lvl=1)
+        vvp = self._get_verbose_printer(lvl=2)
 
         tf.reset_default_graph()
         vp("Preparing test session: %s" % opt.sess_name)
@@ -405,68 +404,78 @@ class OMTFRunner:
             # Input pipes configuration
             test_pipe = OMTFInputPipe(
                     dataset=self.dataset,
-                    name='test',
+                    name=PHASE_NAME.TEST,
                     hits_type=opt.in_type,
                     out_class_bins=opt.out_class_bins,
-                    batch_size=opt.valid_batch_size)
+                    batch_size=opt.valid_batch_size,
+                    remap_data=(opt.nullval, opt.shiftval),
+                    detect_no_signal=opt.detect_no_signal,
+                    limit_examples=opt.limit_test_examples)
         self.show_params()
 
         with tf.Session() as sess:
-            _, net_in, net_pt_out, net_sgn_out = self.network.restore(
-                    sess=sess, sess_name=opt.sess_name)
-            vp("Loaded model: %s" % self.network.name)
-            pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
-                                    name="pt_labels")
-            sgn_labels = tf.placeholder(tf.int8, shape=[None, 2],
-                                    name="sgn_labels")
-            net_pholders = [
-                net_in,
-                pt_labels,
-                sgn_labels
-            ]
-            pt_acc_op, sgn_acc_op, pt_class_op, sgn_class_op = setup_accuracy(
-                    net_pt_out=net_pt_out,
-                    net_sgn_out=net_sgn_out,
-                    pt_labels=pt_labels,
-                    sgn_labels=sgn_labels)
-             
-            summary_op = tf.summary.merge_all()
-            
+            _, tsd = self.network.restore(sess=sess, sess_name=opt.sess_name)
             stamp = self._start_clock()
             vp("{start_datetime} - test started!".format(**stamp))
 
-            summaries, acc_d, nn_stats = collect_statistics(
-                    sess=sess,
-                    sess_name=opt.sess_name,
-                    pipe=test_pipe,            # test using valid set
-                    net_pholders=net_pholders,  # net placeholders
-                    net_pt_out=net_pt_out,      # pt logits out
-                    net_sgn_out=net_sgn_out,    # sgn logits out
-                    net_pt_class=pt_class_op,   # pt class out
-                    net_sgn_class=sgn_class_op, # sgn class out
-                    pt_acc=pt_acc_op, 
-                    sgn_acc=sgn_acc_op,
-                    summary_op=summary_op)      # summary operator
-            nn_stats.set_bins(opt.out_class_bins)
+            # Get collection of initialized variables
+            init = sess.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+            vp("Loaded model: %s" % self.network.name)
 
-            self.network.add_log(acc_d, 1, opt.sess_name)
-            self.network.add_statistics(nn_stats)
-            print(nn_stats)
+            # ==== NETWORK PLACEHOLDERS
+            pt_labels = tf.placeholder(tf.int8, shape=[None, opt.out_len],
+                                    name="pt_labels")
+            sgn_labels = tf.placeholder(tf.int8, shape=[None, 3],
+                                    name="sgn_labels")
+            # ==== SETUP METRICS NODES
+            logits_list = [
+                    ("pt", tsd[OMTFNN.CONST.OUT_PT_NAME], pt_labels),
+                    ("sgn", tsd[OMTFNN.CONST.OUT_SGN_NAME], sgn_labels)
+            ]
+            ops, metrics_init = setup_metrics(logits_list=logits_list)
+            metrics_out = [out for _, out, _, _, _ in ops if out is not None]
+            metrics_ops = [op for _, _, op, _, _ in ops]
+            metrics_ups = [up for _, _, _, up, _ in ops]
+            metrics_summ = [s for _, _, _, _, s in ops if s is not None]
+            names = [x[0] for x in ops]
+            cnt_op = metrics_ops[-1]
+            holders = [
+                tsd[OMTFNN.CONST.IN_HITS_NAME],
+                sgn_labels,
+                pt_labels
+            ]
+            hdict = dict([(k, v) for k, v in zip(NN_HOLDERS_NAMES, holders)])
+            
+            i = 1            
+            stamp = self._start_clock()
+            vp("{start_datetime} - test started".format(**stamp))
+           
+            try:
+                sess.run(metrics_init)
+                test_pipe.initialize(sess)
+                ex_cnt = 0
+                while True:
+                    vvp("Examples processed: %d" % ex_cnt)
+                    vdict, edict = test_pipe.fetch()
+                    if vdict is None:
+                        break
+                    # Prepare training feed dict
+                    feed_dict = dict([(hdict[k], vdict[k]) for k in NN_HOLDERS_NAMES])
+                    feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = False
+                    sess.run(metrics_ups, feed_dict=feed_dict)
+                    ex_cnt = sess.run(cnt_op)
+                    if opt.limit_test_examples is not None:
+                        if opt.limit_test_examples <= ex_cnt:
+                            break
+                accs, summs = sess.run([metrics_ops, metrics_summ])
+                for x, y in zip(names, accs):
+                    print(x, y)
 
+            except KeyboardInterrupt:
+                vp("Training stopped by user!")
             stamp = self._next_tick()
-
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
-            vp("Accuracy:\n\tpt: {pt:f}\n\tsgn: {sgn:f}\n".format(
-                **acc_d))
-
-        res = {
-            'sess_name': opt.sess_name,
-            'accuracy': acc_d,
-            'model': self.network.name
-        }
-        return res
-
 
     def test_many_models(dataset, models_list, **kw):
         """Test all provided models on test dataset.
@@ -474,15 +483,10 @@ class OMTFRunner:
             dataset: dataset to test on
             models_list: list of OMTFNN objects
             **kw: runner params
-        Returns:
-            list of #OMTFRunner.test results
         """
-        test_results = []
         for model in models_list:
             runner = OMTFRunner(dataset, model, **kw)
-            res = runner.test()
-            test_results.append(res)
-        return test_results
+            runner.test()
 
     def show_dbg(self, ddict, edict):
         """Show step-by-step debugger screen"""
