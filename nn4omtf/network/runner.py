@@ -322,7 +322,6 @@ class OMTFRunner:
                                 feed_dict=train_feed_dict)
                         edict['PT_K_OUT'] = train_outs[0]
                         edict['SGN_K_OUT'] = train_outs[1]
-                        print(edict)
                         if self.show_dbg(ddict, edict):
                             vp("Exiting...")
                             break
@@ -331,8 +330,10 @@ class OMTFRunner:
                         _, train_summ, train_ent = sess.run(
                                 [train_ops, train_summ_ops, train_vals], 
                                 feed_dict=train_feed_dict)
-                    self.log_summary(PHASE_NAME.TRAIN, i, train_summ)
-                    self.log(PHASE_NAME.TRAIN, i, zip(['cross-pt', 'cross-sgn'], train_ent))
+# Logging that much is rather bad idea??
+# Save CE suring validation
+#                    self.log_summary(PHASE_NAME.TRAIN, i, train_summ) 
+#                    self.log(PHASE_NAME.TRAIN, i, zip(['cross-pt', 'cross-sgn'], train_ent))
                     vvp("Training step: {step}\nCross entropy PT: {pt}\nCross entropy SGN: {sgn}".format(
                                 step=i,
                                 pt=train_ent[0],
@@ -357,7 +358,11 @@ class OMTFRunner:
                                 if opt.limit_valid_examples <= ex_cnt:
                                     break
                         accs, summs = sess.run([metrics_ops, metrics_summ])
-                        self.log_summary(PHASE_NAME.VALID, i, summs)
+                        # Save also data from last batch before validation
+                        # Just to have any estimation
+                        self.log_summary(PHASE_NAME.VALID, i, summs + train_summ)
+                        names += ['cross-pt', 'cross-sgn']
+                        accs += train_ent
                         self.log(PHASE_NAME.VALID, i, zip(names, accs))
                         for x, y in zip(names, accs):
                             print(x, y)
