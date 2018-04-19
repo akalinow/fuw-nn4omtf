@@ -322,6 +322,7 @@ class OMTFRunner:
                                 feed_dict=train_feed_dict)
                         edict['PT_K_OUT'] = train_outs[0]
                         edict['SGN_K_OUT'] = train_outs[1]
+                        print(edict)
                         if self.show_dbg(ddict, edict):
                             vp("Exiting...")
                             break

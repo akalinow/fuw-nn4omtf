@@ -52,7 +52,6 @@ def _deserialize(
                 - omtf recognized pt (1-hot)
                 - omtf recognized sign 
     """
-    no_signal = False
     prod_dim = NPZ_FIELDS.PROD_SHAPE
     omtf_dim = NPZ_FIELDS.OMTF_SHAPE
 
@@ -72,15 +71,6 @@ def _deserialize(
     examples = tf.parse_single_example(x, features)
 
     hits_arr = examples[hits]
-    if remap_data is not None:
-        nullval, shift = remap_data
-        print(remap_data)
-        transform_fn = lambda x: np.where(x == 5400, nullval, x + shift)
-        hits_arr = tf.py_func(transform_fn,
-                            [hits_arr],
-                            tf.float32,
-                            stateful=False,
-                            name='input_data_transformation')
 
     prod_arr = examples[NPZ_FIELDS.PROD]
     omtf_arr = examples[NPZ_FIELDS.OMTF]
@@ -136,7 +126,16 @@ def _deserialize(
                    stateful=False,
                    name='omtf_pt_class')
 
-    # ======== EXTRA DATA DICT
+    if remap_data is not None:
+        nullval, shift = remap_data
+        transform_fn = lambda x: np.where(x == 5400, nullval, x + shift)
+        hits_arr = tf.py_func(transform_fn,
+                            [hits_arr],
+                            tf.float32,
+                            stateful=False,
+                            name='input_data_transformation')
+    
+        # ======== EXTRA DATA DICT
     # See `PIPE_EXTRA_DATA_NAMES` for correct order of fields
     vals = [
         pt_code,
