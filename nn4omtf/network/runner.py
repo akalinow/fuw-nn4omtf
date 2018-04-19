@@ -198,7 +198,7 @@ class OMTFRunner:
 
 
     def show_params(self):
-        print(self._params_string)
+        print(self._params_string())
 
     def _params_string(self):
         r = "==== OMTFRunner configuration\n"
@@ -223,7 +223,7 @@ class OMTFRunner:
         # opt.sess_name += "/train"
         vp = self._get_verbose_printer(lvl=1)
         vvp = self._get_verbose_printer(lvl=2)
-        vvvp = self._get_verbose_printer(lvl=1)
+        vvvp = self._get_verbose_printer(lvl=3)
 
         tf.reset_default_graph()
         vp("Preparing training session: %s" % opt.sess_name)
@@ -281,6 +281,7 @@ class OMTFRunner:
                         learning_rate=opt.learning_rate)
 
             ops, metrics_init = setup_metrics(logits_list=logits_list)
+            metrics_out = [out for _, out, _, _, _ in ops if out is not None]
             metrics_ops = [op for _, _, op, _, _ in ops]
             metrics_ups = [up for _, _, _, up, _ in ops]
             metrics_summ = [s for _, _, _, _, s in ops if s is not None]
@@ -316,9 +317,11 @@ class OMTFRunner:
                     train_feed_dict = dict([(hdict[k], ddict[k]) for k in NN_HOLDERS_NAMES])
                     train_feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = True
                     if opt.debug:
-                        _, train_summ, train_ent = sess.run(
-                                [train_ops, train_summ_ops, train_vals], 
+                        _, train_summ, train_ent, train_outs = sess.run(
+                                [train_ops, train_summ_ops, train_vals, metrics_out], 
                                 feed_dict=train_feed_dict)
+                        edict['PT_K_OUT'] = train_outs[0]
+                        edict['SGN_K_OUT'] = train_outs[1]
                         if self.show_dbg(ddict, edict):
                             vp("Exiting...")
                             break

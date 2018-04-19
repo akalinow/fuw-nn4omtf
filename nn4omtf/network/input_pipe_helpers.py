@@ -81,13 +81,6 @@ def _deserialize(
                             tf.float32,
                             stateful=False,
                             name='input_data_transformation')
-    if detect_no_signal:
-        mean = tf.py_func(np.mean,
-                            [hits_arr],
-                            tf.float32,
-                            stateful=False,
-                            name='input_data_mean')
-        no_signal = mean >= 5399
 
     prod_arr = examples[NPZ_FIELDS.PROD]
     omtf_arr = examples[NPZ_FIELDS.OMTF]
@@ -98,37 +91,48 @@ def _deserialize(
     # OMTF returns pt=-999 if it can't recognize any pattern in HITS array
     # NN will do the same with PT and SIGN, it will say #0 class when
     # there's no enough data in HITS array.
-    pt_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins)
-    sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[-1.5, 0])
+    pt_bucket_fn = lambda x: np.digitize(x=x, bins=out_class_bins).astype(np.int32)
+    sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[-1.5, 0]).astype(np.int32)
 
     # ======= TRAINING DATA
-    # Prepare production pt labels
-    if no_signal == True:
-        prod_pt_k = 0
-        prod_sgn_k = 0
+    if detect_no_signal:
+        mean = tf.py_func(np.mean,
+                            [hits_arr],
+                            tf.float32,
+                            stateful=False,
+                            name='input_data_mean')
     else:
-        prod_pt_k = tf.py_func(pt_bucket_fn,
-                    [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
-                    tf.int64,
-                    stateful=False,
-                    name='pt_class')
-        prod_sgn_k = tf.py_func(sgn_bucket_fn,
-                    [prod_arr[NPZ_FIELDS.PROD_IDX_SIGN]],
-                    tf.int64,
-                    stateful=False,
-                    name='sgn_class')
+        mean = tf.constant(0, dtype=tf.float32)
+    # Here we build a part of graph!
+    # `no_signal` is a tensor!
+    no_signal = mean >= 5399
+    no_signal_val = lambda: tf.constant(0, dtype=tf.int32)
+    pt_k = lambda: tf.py_func(pt_bucket_fn,
+        [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
+        tf.int32,
+        stateful=False,
+        name='pt_class')
+    sgn_k = lambda: tf.py_func(sgn_bucket_fn,
+        [prod_arr[NPZ_FIELDS.PROD_IDX_SIGN]],
+        tf.int32,
+        stateful=False,
+        name='sgn_class')
+
+    prod_pt_k = tf.case([(no_signal, no_signal_val)], default=pt_k)
+    prod_sgn_k = tf.case([(no_signal, no_signal_val)], default=sgn_k)
+    
     prod_pt_label = tf.one_hot(prod_pt_k, out_len)
     prod_sgn_label = tf.one_hot(prod_sgn_k, 3)
     # ======= EXTRA OMTF DATA
     omtf_sgn_k = tf.py_func(sgn_bucket_fn,
                     [omtf_arr[NPZ_FIELDS.OMTF_IDX_SIGN]],
-                    tf.int64,
+                    tf.int32,
                     stateful=False,
                     name='omtf_sgn_class')
     # Encode omtf pt guessed values 
     omtf_pt_k = tf.py_func(pt_bucket_fn,
                    [omtf_arr[NPZ_FIELDS.OMTF_IDX_PT]],
-                   tf.int64,
+                   tf.int32,
                    stateful=False,
                    name='omtf_pt_class')
 
