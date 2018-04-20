@@ -5,7 +5,7 @@
 
     Neural network based muon momentum classifier trainer and tester.
 """
-
+import numpy as np
 import tensorflow as tf
 import time
 import os
@@ -20,7 +20,7 @@ from nn4omtf.network.runner_helpers import collect_statistics,\
         setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
 from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES,\
-        PHASE_NAME, CNAMES
+        PHASE_NAME, CNAMES, PT_CODE_RANGE, PLT_DATA_TYPE
 
 
 class OMTFRunner:
@@ -67,8 +67,7 @@ class OMTFRunner:
         # Setup parameters
         params = OMTFRunner.DEFAULT_PARAMS
         for key, val in kw.items():
-            if key in params:
-                params[key] = val
+            params[key] = val
         # Setup runner variables
         timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
         pref = params['sess_prefix']
@@ -428,9 +427,11 @@ class OMTFRunner:
             sgn_labels = tf.placeholder(tf.int8, shape=[None, 3],
                                     name="sgn_labels")
             # ==== SETUP METRICS NODES
+            pt_logits = tsd[OMTFNN.CONST.OUT_PT_NAME]
+            sgn_logits = tsd[OMTFNN.CONST.OUT_SGN_NAME]
             logits_list = [
-                    ("pt", tsd[OMTFNN.CONST.OUT_PT_NAME], pt_labels),
-                    ("sgn", tsd[OMTFNN.CONST.OUT_SGN_NAME], sgn_labels)
+                    ("pt", pt_logits, pt_labels),
+                    ("sgn", sgn_logits, sgn_labels)
             ]
             ops, metrics_init = setup_metrics(logits_list=logits_list)
             metrics_out = [out for _, out, _, _, _ in ops if out is not None]
@@ -446,6 +447,14 @@ class OMTFRunner:
             ]
             hdict = dict([(k, v) for k, v in zip(NN_HOLDERS_NAMES, holders)])
             
+            # ==== PROBABILITY DISTRIBUTION
+            prob = [
+                    tf.nn.softmax(pt_logits),
+                    tf.nn.softmax(sgn_logits)
+            ]
+            
+            pt_dist = np.zeros([PT_CODE_RANGE + 1, len(opt.out_class_bins) + 1])
+            sgn_dist = np.zeros([PT_CODE_RANGE + 1, 3, 3])
             i = 1            
             stamp = self._start_clock()
             vp("{start_datetime} - test started".format(**stamp))
@@ -462,7 +471,15 @@ class OMTFRunner:
                     # Prepare training feed dict
                     feed_dict = dict([(hdict[k], vdict[k]) for k in NN_HOLDERS_NAMES])
                     feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = False
-                    sess.run(metrics_ups, feed_dict=feed_dict)
+                    prob_out, _ = sess.run([prob, metrics_ups], feed_dict=feed_dict)
+                    
+                    pt_codes = edict[PIPE_EXTRA_DATA_NAMES[0]]
+
+                    for ptc, dist, s_dist, sgn_k in zip(pt_codes, prob_out[0], prob_out[1], edict['PT_SGN_CLASS']):
+                        ptc = ptc.astype(np.int32)
+                        pt_dist[ptc] += dist
+                        sgn_dist[ptc][sgn_k] += s_dist
+
                     ex_cnt = sess.run(cnt_op)
                     if opt.limit_test_examples is not None:
                         if opt.limit_test_examples <= ex_cnt:
@@ -471,11 +488,42 @@ class OMTFRunner:
                 for x, y in zip(names, accs):
                     print(x, y)
 
+                for k in range(PT_CODE_RANGE):
+                    s = np.sum(pt_dist[k])
+                    if s > 0:
+                        pt_dist[k] = pt_dist[k] / s
+                    for i in range(3):
+                        s = np.sum(sgn_dist[k][i])
+                        if s > 0:
+                            sgn_dist[k] = sgn_dist[k] / s
+                self.save_dist(pt_dist, sgn_dist)
             except KeyboardInterrupt:
                 vp("Training stopped by user!")
             stamp = self._next_tick()
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
+
+    def save_dist(self, ptd, sgnd):
+        if not self.params['prob_dist']:
+            return
+        pout = os.path.join(self.params['logdir'], 'prob_dist')
+        if not os.path.exists(pout):
+            os.makedirs(pout)
+        npzout = os.path.join(pout, 'out.npz')
+        pttxtout = os.path.join(pout, 'pt.txt')
+        np.savez(npzout,
+                datatype=PLT_DATA_TYPE.PROB_DIST,
+                bins=self.params['out_class_bins'],
+                pt_dist=ptd, 
+                sgn_dist=sgnd
+        )
+        np.savetxt(pttxtout, ptd)
+        for k in range(PT_CODE_RANGE):
+            sgntxtout = os.path.join(pout, 'sgn_%#02d.txt' % k)
+            np.savetxt(sgntxtout, sgnd[k])
+
+        print("Probability distributions saved in: " + pout)
+
 
     def test_many_models(dataset, models_list, **kw):
         """Test all provided models on test dataset.

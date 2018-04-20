@@ -4,6 +4,8 @@
     Constants used in nn4omtf.
 """
 
+PT_CODE_RANGE = 31
+
 class PIPE_MAPPING_TYPE:
     INTERLEAVE = 0
     FLAT_MAP = 1
@@ -70,3 +72,6 @@ NN_CNAMES = [
 # This list of labels 
 CNAMES = PIPE_EXTRA_DATA_NAMES + NN_CNAMES
 
+
+class PLT_DATA_TYPE:
+    PROB_DIST = 'prob_dist'
