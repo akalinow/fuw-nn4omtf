@@ -85,6 +85,20 @@ def setup_metrics(logits_list):
                         tf.GraphKeys.LOCAL_VARIABLES, 
                         scope="accuracy/all/metrics"):
                     running_vars.append(el)
+    
+    with tf.name_scope('cross_entropy'):
+        for name, logits, labels in logits_list:
+            name = 'loss_' + name
+            with tf.name_scope(name):
+                cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
+                    labels=labels, logits=logits)
+                ent_op, ent_update_op = tf.metrics.mean(cross_entropy, name="metrics")
+                res.append((name, None, ent_op, ent_update_op, None))
+            for el in tf.get_collection(
+                        tf.GraphKeys.LOCAL_VARIABLES, 
+                        scope="cross_entropy/" + name + "/metrics"):
+                    running_vars.append(el)
+
     with tf.name_scope('cnt'):
         cnt_op, cnt_update_op = tf.contrib.metrics.count(comm_f, name="metrics")
         res.append(('count', None, cnt_op, cnt_update_op, None))
@@ -94,91 +108,4 @@ def setup_metrics(logits_list):
             running_vars.append(el)
     initializer = tf.variables_initializer(var_list=running_vars)
     return res, initializer
-
-def collect_statistics(
-        sess,           # Session
-        sess_name,
-        pipe,           # Feed input pipe
-        net_pholders,   # Network placeholders
-        net_pt_out,     # Network pt output (logits)
-        net_sgn_out,    # Network sgn output (logits) 
-        net_pt_class,   # Network pt output argmax (int)
-        net_sgn_class,  # Network sgn output argmax (int)
-        pt_acc,         # pt accyracy node
-        sgn_acc,        # sign accuracy node
-        summary_op):
-    """Statistics collector
-    Run network and put data into OMTFStatistics object.
-    Args:
-        sess: TF session
-        sess_name: session name
-        pipe: Feed input pipe
-        net_pholders: Network placeholders
-        net_pt_out: Network pt output (logits)
-        net_sgn_out: Network sgn output (logits) 
-        net_pt_class: Network pt output argmax (int)
-        net_sgn_class: Network sgn output argmax (int)
-        pt_acc: pt accyracy node
-        sgn_acc: sign accuracy node
-        summary_op: summary tensor
-
-    Returns:
-        tuple of:
-            - list of summaries
-            - accuracy dict
-            - OMTFStatistics object
-    """
-    pipe.initialize(sess)
-    summaries = []
-    pt_res = .0
-    sgn_res = .0
-    cnt = 0
-    stats = OMTFStatistics(sess_name)
-
-    while True:
-        # Get also extra data dict and put into statistics
-        datalist = pipe.fetch()
-        if datalist[0] is None:
-            break
-
-        # Prepare feed dict
-        feed_dict = dict([(k, v) for k, v in zip(net_pholders, datalist[:-1])])
-
-        # Get basic set of data
-        input_basic = [
-            summary_op,
-            pt_acc,
-            sgn_acc
-        ]
-        
-        # Request extra data
-        # Order is important, see `NN_CNAMES` in stats_const.py
-        input_extra = [
-            net_pt_class,
-            net_sgn_class,
-            net_pt_out,
-            net_sgn_out
-        ]
-        run_input = input_basic + input_extra
-        run_output = sess.run(run_input, feed_dict=feed_dict)
-
-        # Accumulate overall results from all batches
-        l = datalist[0].shape[0]
-        cnt += l
-        pt_res += l * run_output[1]
-        sgn_res += l * run_output[2]
-        
-        summaries.append(run_output[0])
-
-        # Prapare extra result dict, merge (k, v) pairs
-        kvs = [(k, v) for k, v in zip(NN_CNAMES, run_output[3:])] \
-                + list(datalist[-1].items())
-        stats.append(cols_dict=dict(kvs))
-        
-    acc = {
-        "pt": pt_res / cnt,
-        "sgn": sgn_res / cnt
-    }
-    return summaries, acc, stats
-    
 

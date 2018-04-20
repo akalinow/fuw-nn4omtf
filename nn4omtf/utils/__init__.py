@@ -11,3 +11,5 @@ from nn4omtf.utils.np_utils import load_dict_from_npz, save_dict_as_npz
 
 from nn4omtf.utils.py_utils import dict_to_object, get_from_module_by_name
 from nn4omtf.utils.py_utils import get_source_of_obj, import_module_from_path
+
+from nn4omtf.utils.plotter import OMTFPlotter

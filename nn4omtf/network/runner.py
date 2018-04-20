@@ -16,8 +16,7 @@ from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network import OMTFNN
 from nn4omtf.utils import init_uninitialized_variables, dict_to_object
 
-from nn4omtf.network.runner_helpers import collect_statistics,\
-        setup_metrics, setup_trainer
+from nn4omtf.network.runner_helpers import setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
 from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES,\
         PHASE_NAME, CNAMES, PT_CODE_RANGE, PLT_DATA_TYPE
@@ -84,23 +83,28 @@ class OMTFRunner:
         self.params = params
 
     def _log_init(self):
+        # Here we'll store validation data
+        # Do not left your PC for months
+        self.results = None           
+        
         self.log_hnd = {
-                PHASE_NAME.TRAIN: None,
                 PHASE_NAME.VALID: None,
                 PHASE_NAME.TEST: None
         }
         self.writers = self.log_hnd.copy()
+
+        if self.params['log'] is 'none':
+            return
+
         fname = os.path.join(self.params['logdir'], self.params['sess_name'])
         os.makedirs(fname)
+        self.lognpz = os.path.join(fname, 'valid-logs.npz')
+
         if self.params['log'] in ['txt', 'both']:
             if self.params['phase'] == PHASE_NAME.TRAIN:
-                tname = os.path.join(fname,'train.txt')
                 vname = os.path.join(fname,'valid.txt')
-                tf = open(tname, 'w')
                 vf = open(vname, 'w')
-                self.log_hnd[PHASE_NAME.TRAIN] = tf
                 self.log_hnd[PHASE_NAME.VALID] = vf
-                tf.write(self._params_string())
                 vf.write(self._params_string())
                 
             else:
@@ -109,9 +113,7 @@ class OMTFRunner:
 
         if self.params['log'] in ['tb', 'both']:
             if self.params['phase'] == PHASE_NAME.TRAIN:
-                tname = os.path.join(fname, PHASE_NAME.TRAIN)
                 vname = os.path.join(fname, PHASE_NAME.VALID)
-                self.writers[PHASE_NAME.TRAIN] = tf.summary.FileWriter(tname)
                 self.writers[PHASE_NAME.VALID] = tf.summary.FileWriter(vname)
             else:
                 tname = os.path.join(fname, PHASE_NAME.TEST)
@@ -136,6 +138,16 @@ class OMTFRunner:
             return
         for summ in summs:
             writer.add_summary(summ, step)
+
+    def log_to_npz(self, names, data):
+        if self.params['log'] is 'none':
+            return
+        accs = np.array([data])
+        if self.results is None:
+            self.results = accs
+        else:
+            self.results = np.append(self.results, accs, axis=0)
+        np.savez(self.lognpz, names=names, data=self.results)
 
     def _log_deinit(self):
         for k, v in self.log_hnd.items():
@@ -302,7 +314,7 @@ class OMTFRunner:
             i = 1            
             stamp = self._start_clock()
             vp("{start_datetime} - training started".format(**stamp))
-           
+
             try:
                 while i <= opt.steps or opt.steps < 0:
                     # ======= TRAINING SECTION
@@ -326,17 +338,9 @@ class OMTFRunner:
                             break
                     else:
                         # Do mini-batch iteration
-                        _, train_summ, train_ent = sess.run(
-                                [train_ops, train_summ_ops, train_vals], 
+                        _, train_summ= sess.run(
+                                [train_ops, train_summ_ops], 
                                 feed_dict=train_feed_dict)
-# Logging that much is rather bad idea??
-# Save CE suring validation
-#                    self.log_summary(PHASE_NAME.TRAIN, i, train_summ) 
-#                    self.log(PHASE_NAME.TRAIN, i, zip(['cross-pt', 'cross-sgn'], train_ent))
-                    vvp("Training step: {step}\nCross entropy PT: {pt}\nCross entropy SGN: {sgn}".format(
-                                step=i,
-                                pt=train_ent[0],
-                                sgn=train_ent[1]))
                     # ======= VALIDATION SECTION
                     if i % opt.acc_ival == 0:
                         vp("Validation @ step {step}".format(step=i))
@@ -357,15 +361,11 @@ class OMTFRunner:
                                 if opt.limit_valid_examples <= ex_cnt:
                                     break
                         accs, summs = sess.run([metrics_ops, metrics_summ])
-                        # Save also data from last batch before validation
-                        # Just to have any estimation
                         self.log_summary(PHASE_NAME.VALID, i, summs + train_summ)
-                        names += ['cross-pt', 'cross-sgn']
-                        accs += train_ent
                         self.log(PHASE_NAME.VALID, i, zip(names, accs))
                         for x, y in zip(names, accs):
                             print(x, y)
-
+                        self.log_to_npz(names, accs)
                     self._next_tick()
                     i += 1
 
@@ -471,10 +471,16 @@ class OMTFRunner:
                     # Prepare training feed dict
                     feed_dict = dict([(hdict[k], vdict[k]) for k in NN_HOLDERS_NAMES])
                     feed_dict[tsd[OMTFNN.CONST.IN_PHASE_NAME]] = False
-                    prob_out, _ = sess.run([prob, metrics_ups], feed_dict=feed_dict)
                     
+                    prob_out, vout, _ = sess.run([prob, metrics_out, metrics_ups], feed_dict=feed_dict)
                     pt_codes = edict[PIPE_EXTRA_DATA_NAMES[0]]
-
+                    if opt.debug:
+                        edict['SGN_K_OUT'] = vout[1]
+                        edict['PT_K_OUT'] = vout[0]
+                        if self.show_dbg(vdict, edict):
+                            vp("Exiting...")
+                            break
+                    
                     for ptc, dist, s_dist, sgn_k in zip(pt_codes, prob_out[0], prob_out[1], edict['PT_SGN_CLASS']):
                         ptc = ptc.astype(np.int32)
                         pt_dist[ptc] += dist
@@ -495,7 +501,7 @@ class OMTFRunner:
                     for i in range(3):
                         s = np.sum(sgn_dist[k][i])
                         if s > 0:
-                            sgn_dist[k] = sgn_dist[k] / s
+                            sgn_dist[k][i] = sgn_dist[k][i] / s
                 self.save_dist(pt_dist, sgn_dist)
             except KeyboardInterrupt:
                 vp("Training stopped by user!")
@@ -509,7 +515,7 @@ class OMTFRunner:
         pout = os.path.join(self.params['logdir'], 'prob_dist')
         if not os.path.exists(pout):
             os.makedirs(pout)
-        npzout = os.path.join(pout, 'out.npz')
+        npzout = os.path.join(pout, 'prob_dist.npz')
         pttxtout = os.path.join(pout, 'pt.txt')
         np.savez(npzout,
                 datatype=PLT_DATA_TYPE.PROB_DIST,
