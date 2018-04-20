@@ -18,20 +18,35 @@ class OMTFPlotter:
         self.plots = []
 
     def from_npz(fname):
-        print("Opening file: " + fname)
         data = np.load(fname)
         return OMTFPlotter(data)
 
     def plot(self, outdir, prefix=""):
-        print("Plot type: %s" % self.type)
         self.outdir = outdir
         self.pref = prefix
         if self.type == PLT_DATA_TYPE.PROB_DIST:
             self._plot_dist()
+        if self.type == PLT_DATA_TYPE.TRAIN_LOG:
+            self._plot_trainlog()
+
+    def _plot_trainlog(self):
+        names = self.data['names']
+        data = self.data['data']
+        for i in range(len(names)):
+            n = names[i]
+            vals = data[:,i]
+            fig, ax = plt.subplots()
+            fs = ax.plot(vals)
+            ax.set_xlabel('Validation step')
+            ax.set_title('Log monitor of: %s' % n) 
+            self._save(
+                    scope=PLT_DATA_TYPE.TRAIN_LOG,
+                    name="%s.png" % n,
+                    fig=fig)
+            plt.close()
 
 
     def _plot_dist(self):
-        # TODO sign class distribution
         figs = []
         pt = self.data['pt_dist']
         sgn = self.data['sgn_dist']

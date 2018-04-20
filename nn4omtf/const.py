@@ -74,4 +74,5 @@ CNAMES = PIPE_EXTRA_DATA_NAMES + NN_CNAMES
 
 
 class PLT_DATA_TYPE:
-    PROB_DIST = 'prob_dist'
+    PROB_DIST = 'prob_disti'
+    TRAIN_LOG = 'train_log'

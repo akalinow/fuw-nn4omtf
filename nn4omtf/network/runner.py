@@ -147,7 +147,10 @@ class OMTFRunner:
             self.results = accs
         else:
             self.results = np.append(self.results, accs, axis=0)
-        np.savez(self.lognpz, names=names, data=self.results)
+        np.savez(self.lognpz, 
+                names=names, 
+                data=self.results, 
+                datatype=PLT_DATA_TYPE.TRAIN_LOG)
 
     def _log_deinit(self):
         for k, v in self.log_hnd.items():
