@@ -44,7 +44,6 @@ class OMTFPlotter:
         data = self.data['nn_h']
         omtf = self.data['om_h']
         pv_avg = self.data['pv_a']
-        print(pv_avg)
         l = bins.size + 1
         ptcs = [i for i in range(PT_CODE_RANGE + 1)]
 

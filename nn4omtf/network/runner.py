@@ -100,6 +100,7 @@ class OMTFRunner:
 
         fname = os.path.join(self.params['logdir'], self.params['sess_name'])
         os.makedirs(fname)
+        self.logdir = fname
         self.lognpz = os.path.join(fname, 'valid-logs.npz')
 
         if self.params['log'] in ['txt', 'both']:
@@ -149,10 +150,15 @@ class OMTFRunner:
             self.results = accs
         else:
             self.results = np.append(self.results, accs, axis=0)
-        np.savez(self.lognpz, 
-                names=names, 
-                data=self.results, 
-                datatype=PLT_DATA_TYPE.TRAIN_LOG)
+        sdict = {
+            'names': names, 
+            'data': self.results, 
+            'datatype': PLT_DATA_TYPE.TRAIN_LOG
+        }
+        np.savez(self.lognpz, **sdict) 
+        if self.params['plot_online']:
+           plt = OMTFPlotter(sdict)
+           plt.plot(self.logdir)
 
     def _log_deinit(self):
         for k, v in self.log_hnd.items():
