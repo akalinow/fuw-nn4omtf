@@ -81,6 +81,8 @@ class OMTFRunner:
         for k, v in var.items():
             params[k] = v
         self.params = params
+        self.answers = None
+
 
     def _log_init(self):
         # Here we'll store validation data
@@ -454,10 +456,10 @@ class OMTFRunner:
             prob = [
                     tf.nn.softmax(pt_logits),
                     tf.nn.softmax(sgn_logits)
-            ]
-            
+            ]            
             pt_dist = np.zeros([PT_CODE_RANGE + 1, len(opt.out_class_bins) + 1])
             sgn_dist = np.zeros([PT_CODE_RANGE + 1, 3, 3])
+
             i = 1            
             stamp = self._start_clock()
             vp("{start_datetime} - test started".format(**stamp))
@@ -484,6 +486,17 @@ class OMTFRunner:
                             vp("Exiting...")
                             break
                     
+                    self.collect_answers(
+                            no_signal=edict['NO_SIGNAL'], 
+                            pt_codes=edict['PT_CODE'], 
+                            pt_vals=edict['PT_VAL'],
+                            sgn_k=edict['PT_SGN_CLASS'], 
+                            pt_k=edict['PT_CLASS'],
+                            omtf_pt_k=edict['OMTF_PT_CLASS'], 
+                            omtf_sgn_k=edict['OMTF_SGN_CLASS'], 
+                            nn_pt_k=vout[0],
+                            nn_sgn_k=vout[1])
+
                     for ptc, dist, s_dist, sgn_k in zip(pt_codes, prob_out[0], prob_out[1], edict['PT_SGN_CLASS']):
                         ptc = ptc.astype(np.int32)
                         pt_dist[ptc] += dist
@@ -506,11 +519,51 @@ class OMTFRunner:
                         if s > 0:
                             sgn_dist[k][i] = sgn_dist[k][i] / s
                 self.save_dist(pt_dist, sgn_dist)
+
             except KeyboardInterrupt:
                 vp("Training stopped by user!")
             stamp = self._next_tick()
             vp("{datetime} - test finished!".format(**stamp))
             vp("Test run took: {last:.1f} sec.".format(**stamp))
+            self.save_answers()
+            self.save_hist()
+
+    def collect_answers(self, **kw):
+        if self.answers is None:
+            self.answers = dict([(k, np.array(v)) for k, v in kw.items()])
+        else:
+            for k, v in kw.items():
+                self.answers[k] = np.append(self.answers[k], np.array(v))
+    
+    def save_answers(self):
+        if self.params['save_answers']:
+            fout = os.path.join(self.params['logdir'], 'answers.npz')
+            np.savez(fout, 
+                    **self.answers, 
+                    datatype=PLT_DATA_TYPE.ANSWERS,
+                    bins=self.params['out_class_bins']
+                    )
+
+    def save_hist(self):
+        if not self.params['activation_curves']:
+            return
+        psbs = [i for i in range(PT_CODE_RANGE + 2)]
+        l = self.params['out_len']
+        csbs = [i for i in range(l)]
+        ptcs = self.answers['pt_codes']
+        nnpk = self.answers['nn_pt_k']
+        ompk = self.answers['omtf_pt_k']
+        nn_h, _, _ = np.histogram2d(x=ptcs, y=nnpk, bins=(psbs, csbs))
+        om_h, _, _ = np.histogram2d(x=ptcs, y=ompk, bins=(psbs, csbs))
+        fout = os.path.join(self.params['logdir'], 
+                            PLT_DATA_TYPE.HIST_CODE_BIN + '.npz')
+        np.savez(fout, 
+                datatype=PLT_DATA_TYPE.HIST_CODE_BIN,
+                bins=self.params['out_class_bins'],
+                nn_h=nn_h,
+                om_h=om_h
+                )
+        
 
     def save_dist(self, ptd, sgnd):
         if not self.params['prob_dist']:

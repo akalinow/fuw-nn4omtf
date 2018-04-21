@@ -24,7 +24,8 @@ PIPE_EXTRA_DATA_NAMES = [
     "PT_SGN_CLASS",     # Classified real muon charge
     "OMTF_PT_VAL",      # OMTF pt results
     "OMTF_PT_CLASS",    # Classified OMTF pt result (-1 <=> -999.0)
-    "OMTF_SGN_CLASS"    # Classified OMTF charge sign
+    "OMTF_SGN_CLASS",   # Classified OMTF charge sign
+    "NO_SIGNAL"         # Empty hits array
 ]
 
 class HITS_TYPE:
@@ -76,3 +77,5 @@ CNAMES = PIPE_EXTRA_DATA_NAMES + NN_CNAMES
 class PLT_DATA_TYPE:
     PROB_DIST = 'prob_disti'
     TRAIN_LOG = 'train_log'
+    HIST_CODE_BIN = 'hits_code_bin'
+    ANSWERS = 'answers'

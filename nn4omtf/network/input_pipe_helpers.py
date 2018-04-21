@@ -144,7 +144,8 @@ def _deserialize(
         prod_sgn_k,
         omtf_arr[NPZ_FIELDS.OMTF_IDX_PT],
         omtf_pt_k,
-        omtf_sgn_k
+        omtf_sgn_k,
+        tf.cast(no_signal, tf.int8)
     ]
     edata_dict = dict([(k, v) for k, v in zip(PIPE_EXTRA_DATA_NAMES, vals)])
     data_list = [

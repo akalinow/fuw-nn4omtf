@@ -7,12 +7,17 @@
 """
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 from nn4omtf.const import PLT_DATA_TYPE, PT_CODE_RANGE
+
+import matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
 
 
 class OMTFPlotter:
     def __init__(self, arrdict):
+        # Change matplotlib backend
+        # Default is 'tkinter'
         self.data = arrdict
         self.type = self.data['datatype']
         self.plots = []
@@ -28,6 +33,49 @@ class OMTFPlotter:
             self._plot_dist()
         if self.type == PLT_DATA_TYPE.TRAIN_LOG:
             self._plot_trainlog()
+        if self.type == PLT_DATA_TYPE.HIST_CODE_BIN:
+            self._plot_histcb()
+
+
+    def _plot_histcb(self):
+        """Plot 2D map and all possible activation curves."""
+
+        bins = self.data['bins']
+        data = self.data['nn_h']
+        omtf = self.data['om_h']
+
+        l = bins.size + 1
+        ptcs = [i for i in range(PT_CODE_RANGE + 1)]
+
+        # Generate 2d map
+        # TODO later
+        
+        # Generate activation curves for each edge
+        # Total counts for each pt code, same values in both cases
+        tot = np.sum(data, axis=1).astype(np.float32)
+        # Calculate (for each pt code) counts with pt treshold equal 
+        # to lower bound of given bin
+        nn_ints = np.array([np.sum(data[:,i:], axis=1).astype(np.float32) for i in range(1,l)])
+        om_ints = np.array([np.sum(omtf[:,i:], axis=1).astype(np.float32) for i in range(1,l)])
+        # Calculate ratio (doing it by hand to ommit division by zero)
+        for i in ptcs:
+            if tot[i] > 0:
+                nn_ints[:,i] /= tot[i]
+                om_ints[:,i] /= tot[i]
+
+        for i in range(0, l-1):
+            fig, ax = plt.subplots()
+            ax.plot(ptcs[:-2], nn_ints[i,:-2], 'go-.', label='neural net')
+            ax.plot(ptcs[:-2], om_ints[i,:-2], 'ro-.', label='OMTF')
+            ax.set_xlabel('$p_T$ code')
+            ax.set_title('Activation curve: $p_T$ > %.1f' % bins[i]) 
+            fig.tight_layout()
+            self._save(
+                    scope=PLT_DATA_TYPE.HIST_CODE_BIN,
+                    name="ac_%.1f.png" % bins[i],
+                    fig=fig)
+            plt.close()
+
 
     def _plot_trainlog(self):
         names = self.data['names']
@@ -36,7 +84,7 @@ class OMTFPlotter:
             n = names[i]
             vals = data[:,i]
             fig, ax = plt.subplots()
-            fs = ax.plot(vals)
+            fs = ax.plot(vals, 'g.')
             ax.set_xlabel('Validation step')
             ax.set_title('Log monitor of: %s' % n) 
             self._save(
