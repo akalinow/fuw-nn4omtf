@@ -14,7 +14,7 @@ import subprocess
 
 from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network import OMTFNN
-from nn4omtf.utils import init_uninitialized_variables, dict_to_object
+from nn4omtf.utils import init_uninitialized_variables, dict_to_object, OMTFPlotter
 
 from nn4omtf.network.runner_helpers import setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
