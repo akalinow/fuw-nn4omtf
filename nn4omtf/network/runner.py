@@ -550,18 +550,26 @@ class OMTFRunner:
         psbs = [i for i in range(PT_CODE_RANGE + 2)]
         l = self.params['out_len']
         csbs = [i for i in range(l)]
+        # Make bins for muon's pt value
+        pvbs = [i for i in range(1002)]
         ptcs = self.answers['pt_codes']
         nnpk = self.answers['nn_pt_k']
         ompk = self.answers['omtf_pt_k']
+        pvs = self.answers['pt_vals']
         nn_h, _, _ = np.histogram2d(x=ptcs, y=nnpk, bins=(psbs, csbs))
         om_h, _, _ = np.histogram2d(x=ptcs, y=ompk, bins=(psbs, csbs))
+        pv_h, _, _ = np.histogram2d(x=ptcs, y=pvs, bins=(psbs, pvbs))
+        pv = pv_h * pvbs[:-1]
+        pv = np.mean(pv, axis=1)
+        # This is average pt value in given pt code
         fout = os.path.join(self.params['logdir'], 
                             PLT_DATA_TYPE.HIST_CODE_BIN + '.npz')
         np.savez(fout, 
                 datatype=PLT_DATA_TYPE.HIST_CODE_BIN,
                 bins=self.params['out_class_bins'],
                 nn_h=nn_h,
-                om_h=om_h
+                om_h=om_h,
+                pv_a=pv
                 )
         
 

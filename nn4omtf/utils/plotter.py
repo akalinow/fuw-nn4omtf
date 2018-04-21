@@ -43,7 +43,8 @@ class OMTFPlotter:
         bins = self.data['bins']
         data = self.data['nn_h']
         omtf = self.data['om_h']
-
+        pv_avg = self.data['pv_a']
+        print(pv_avg)
         l = bins.size + 1
         ptcs = [i for i in range(PT_CODE_RANGE + 1)]
 
@@ -65,10 +66,11 @@ class OMTFPlotter:
 
         for i in range(0, l-1):
             fig, ax = plt.subplots()
-            ax.plot(ptcs[:-2], nn_ints[i,:-2], 'go-.', label='neural net')
-            ax.plot(ptcs[:-2], om_ints[i,:-2], 'ro-.', label='OMTF')
+            l1 = ax.plot(ptcs[:-2], nn_ints[i,:-2], 'go-.', label='Neural net')
+            l2 = ax.plot(ptcs[:-2], om_ints[i,:-2], 'ro-.', label='OMTF')
             ax.set_xlabel('$p_T$ code')
-            ax.set_title('Activation curve: $p_T$ > %.1f' % bins[i]) 
+            ax.set_title('Activation curve: $p_T$ > %.1f' % bins[i])
+            ax.legend()
             fig.tight_layout()
             self._save(
                     scope=PLT_DATA_TYPE.HIST_CODE_BIN,
