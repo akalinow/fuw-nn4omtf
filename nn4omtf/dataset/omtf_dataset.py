@@ -11,7 +11,7 @@ import pickle
 import tensorflow as tf
 import numpy as np
 from nn4omtf.utils import load_dict_from_npz, float_feature
-from nn4omtf.const import NPZ_FIELDS
+from nn4omtf.const import NPZ_FIELDS, FILTER_DEFAULT
 
 
 class OMTFDataset:
@@ -25,7 +25,7 @@ class OMTFDataset:
             'valid_frac': 0.15,
             'test_frac': 0.15,
             'no_compress': False,
-            'filter_no_signal': False
+            'filter_no_signal': FILTER_DEFAULT 
     }
 
 
@@ -213,13 +213,12 @@ class OMTFDataset:
         # Calculate no signal mask
         mask = data[NPZ_FIELDS.HITS_REDUCED]    # Get array
         mask = np.mean(mask, axis=(2,1))        # Calc mean of all data for each event
-        # Set False of all events where mean was equal 5400 (no signal was observed)
-        mask = mask < 5400.
-        if self.params['filter_no_signal']:
-            data_to_save = dict([(k, data[k][mask]) for k in to_save_list])
-            ev_all = np.sum(mask)
-        else:
-            data_to_save = dict([(k, data[k]) for k in to_save_list])
+
+        # Using mask filter out all states where MEAN over hits array is
+        # greater than given THRESHOLD         
+        mask = mask <= self.params['filter_no_signal']
+        data_to_save = dict([(k, data[k][mask]) for k in to_save_list])
+        ev_all = np.sum(mask)
         ev_save = int(self.params['events_frac'] * ev_all)
         if verbose:
             print("Events in file: %d" % ev_all_orig)

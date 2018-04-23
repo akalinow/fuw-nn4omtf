@@ -11,14 +11,15 @@ import multiprocessing
 import tensorflow as tf
 
 from nn4omtf.const import NPZ_FIELDS, HITS_TYPE, \
-        PIPE_MAPPING_TYPE, PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES
+        PIPE_MAPPING_TYPE, PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES,\
+        FILTER_DEFAULT
 
 def _deserialize(
         x, 
         hits_type, 
         out_len, 
         out_class_bins, 
-        detect_no_signal=False,
+        detect_no_signal=FILTER_DEFAULT,
         remap_data=None):
     """Deserialize hits and convert pt value into categories using
     with one-hot encoding.
@@ -85,17 +86,14 @@ def _deserialize(
     sgn_bucket_fn = lambda x: np.digitize(x=x, bins=[-1.5, 0]).astype(np.int32)
 
     # ======= TRAINING DATA
-    if detect_no_signal:
-        mean = tf.py_func(np.mean,
+    mean = tf.py_func(np.mean,
                             [hits_arr],
                             tf.float32,
                             stateful=False,
-                            name='input_data_mean')
-    else:
-        mean = tf.constant(0, dtype=tf.float32)
+                            name='HITS_mean')
     # Here we build a part of graph!
     # `no_signal` is a tensor!
-    no_signal = mean >= 5399
+    no_signal = mean > detect_no_signal
     no_signal_val = lambda: tf.constant(0, dtype=tf.int32)
     pt_k = lambda: tf.py_func(pt_bucket_fn,
         [prod_arr[NPZ_FIELDS.PROD_IDX_PT]],
@@ -164,7 +162,7 @@ def _new_tfrecord_dataset(
         in_type,
         out_len, 
         out_class_bins,
-        detect_no_signal=False,
+        detect_no_signal=FILTER_DEFAULT,
         remap_data=None):
     """Creates new TFRecordsDataset as a result of map function.
     It's interleaved in #setup_input_pipe method as a base of lambda.
@@ -211,7 +209,7 @@ def setup_input_pipe(
         shuffle=False, 
         reps=1,             
         mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE,
-        detect_no_signal=False,
+        detect_no_signal=FILTER_DEFAULT,
         remap_data=None):
     """Create new input pipeline for given dataset.
 

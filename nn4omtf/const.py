@@ -38,6 +38,11 @@ PT_CODES = [
     [31, 140.00, 1000.00, 570.00],
 ]
 
+# Default threshold value of MEAN(HITS)
+# Above input data is consider as `no signal detected`
+# and mapped to `NULL` state.
+FILTER_DEFAULT = 5400
+
 class PIPE_MAPPING_TYPE:
     INTERLEAVE = 0
     FLAT_MAP = 1

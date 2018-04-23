@@ -19,7 +19,7 @@ from nn4omtf.utils import init_uninitialized_variables, dict_to_object, OMTFPlot
 from nn4omtf.network.runner_helpers import setup_metrics, setup_trainer
 from nn4omtf.network.input_pipe import OMTFInputPipe
 from nn4omtf.const import PIPE_EXTRA_DATA_NAMES, NN_HOLDERS_NAMES,\
-        PHASE_NAME, CNAMES, PT_CODE_RANGE, PLT_DATA_TYPE
+        PHASE_NAME, CNAMES, PT_CODE_RANGE, PLT_DATA_TYPE, FILTER_DEFAULT
 
 
 class OMTFRunner:
@@ -33,7 +33,6 @@ class OMTFRunner:
     """
 
     DEFAULT_PARAMS = {
-        "detect_no_signal": False,
         "valid_batch_size": 1000,
         "batch_size": 1000,
         "sess_prefix": "",
@@ -49,7 +48,8 @@ class OMTFRunner:
         "limit_valid_examples": None,
         "limit_test_examples": None,
         "debug": False,
-        "log": 'none'
+        "log": 'none',
+        "detect_no_signal": FILTER_DEFAULT
     }
 
     def __init__(self, dataset, network, **kw):
@@ -261,7 +261,7 @@ class OMTFRunner:
                     shuffle=opt.shuffle,
                     reps=opt.epochs,
                     remap_data=(opt.nullval, opt.shiftval),
-                    detect_no_signal=True
+                    detect_no_signal=opt.detect_no_signal
                     )
             valid_pipe = OMTFInputPipe(
                     dataset=self.dataset,
@@ -270,7 +270,7 @@ class OMTFRunner:
                     batch_size=opt.valid_batch_size,
                     out_class_bins=opt.out_class_bins,
                     remap_data=(opt.nullval, opt.shiftval),
-                    detect_no_signal=True,
+                    detect_no_signal=opt.detect_no_signal,
                     limit_examples=opt.limit_valid_examples)
         self.show_params()
 
@@ -543,7 +543,7 @@ class OMTFRunner:
     
     def save_answers(self):
         if self.params['save_answers']:
-            fout = os.path.join(self.params['logdir'], 'answers.npz')
+            fout = os.path.join(self.logdir, 'answers.npz')
             np.savez(fout, 
                     **self.answers, 
                     datatype=PLT_DATA_TYPE.ANSWERS,
@@ -568,7 +568,7 @@ class OMTFRunner:
         pv = pv_h * pvbs[:-1]
         pv = np.mean(pv, axis=1)
         # This is average pt value in given pt code
-        fout = os.path.join(self.params['logdir'], 
+        fout = os.path.join(self.logdir, 
                             PLT_DATA_TYPE.HIST_CODE_BIN + '.npz')
         np.savez(fout, 
                 datatype=PLT_DATA_TYPE.HIST_CODE_BIN,
@@ -582,7 +582,7 @@ class OMTFRunner:
     def save_dist(self, ptd, sgnd):
         if not self.params['prob_dist']:
             return
-        pout = os.path.join(self.params['logdir'], 'prob_dist')
+        pout = os.path.join(self.logdir, 'prob_dist')
         if not os.path.exists(pout):
             os.makedirs(pout)
         npzout = os.path.join(pout, 'prob_dist.npz')

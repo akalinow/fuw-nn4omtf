@@ -9,7 +9,7 @@
 import tensorflow as tf
 from nn4omtf.dataset import OMTFDataset
 from nn4omtf.network.input_pipe_helpers import setup_input_pipe
-from nn4omtf.const import PHASE_NAME, PIPE_MAPPING_TYPE
+from nn4omtf.const import PHASE_NAME, PIPE_MAPPING_TYPE, FILTER_DEFAULT 
 
 class OMTFInputPipe:
     """
@@ -26,7 +26,7 @@ class OMTFInputPipe:
             reps=1, 
             mapping_type=PIPE_MAPPING_TYPE.INTERLEAVE, 
             limit_examples=None,
-            detect_no_signal=False,
+            detect_no_signal=FILTER_DEFAULT,
             remap_data=None):
         """Create input pipe
         Args:
@@ -41,6 +41,7 @@ class OMTFInputPipe:
             detect_no_signal:
             remap_data:
         """
+        # TODO describe arguments
         self.dataset = dataset
         filenames, files_n = self.dataset.get_dataset(name=name)
         self.filenames = filenames
