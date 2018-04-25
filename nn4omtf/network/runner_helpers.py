@@ -34,12 +34,14 @@ def setup_trainer(train_list, learning_rate=1e-3):
                     labels=labels, logits=logits)
                 cross_entropy = tf.reduce_mean(cross_entropy)
                 s = tf.summary.scalar('cross_entropy', cross_entropy)
-            with tf.name_scope('optimizer'):
-                train_step = tf.train.AdamOptimizer(
-                    learning_rate=learning_rate).minimize(cross_entropy)
-            train_ops.append(train_step)
             summ_ops.append(s)
             values.append(cross_entropy)
+    
+    cross_entropy = values[0] + values[1]
+    with tf.name_scope('optimizer'):
+        train_step = tf.train.AdamOptimizer(
+            learning_rate=learning_rate).minimize(cross_entropy)
+    train_ops.append(train_step)
     return names, train_ops, summ_ops, values
 
 
