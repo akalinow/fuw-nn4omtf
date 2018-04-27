@@ -95,9 +95,9 @@ class OMTFRunner:
         }
         self.writers = self.log_hnd.copy()
 
-        if self.params['log'] is 'none':
-            return
-
+#        if self.params['log'] is 'none':
+#            return
+        print("Logdir: ", self.params['logdir'])
         fname = os.path.join(self.params['logdir'], self.params['sess_name'])
         os.makedirs(fname)
         self.logdir = fname
@@ -403,6 +403,7 @@ class OMTFRunner:
         """
         kw['phase'] = PHASE_NAME.TEST
         self._update_params(kw)
+        self._log_init()
         opt = dict_to_object(self.params)
         vp = self._get_verbose_printer(lvl=1)
         vvp = self._get_verbose_printer(lvl=2)
@@ -533,6 +534,8 @@ class OMTFRunner:
             vp("Test run took: {last:.1f} sec.".format(**stamp))
             self.save_answers()
             self.save_hist()
+            self._log_deinit()
+
 
     def collect_answers(self, **kw):
         if self.answers is None:
@@ -558,10 +561,14 @@ class OMTFRunner:
         csbs = [i for i in range(l)]
         # Make bins for muon's pt value
         pvbs = [i for i in range(1002)]
-        ptcs = self.answers['pt_codes']
-        nnpk = self.answers['nn_pt_k']
         ompk = self.answers['omtf_pt_k']
-        pvs = self.answers['pt_vals']
+        # Filtering answers where omtf didn't see anything
+        mask = ompk != 0
+        print("OMTF was blind in %d cases" % np.sum(mask))
+        ompk = ompk[mask]
+        ptcs = self.answers['pt_codes'][mask]
+        nnpk = self.answers['nn_pt_k'][mask]
+        pvs = self.answers['pt_vals'][mask]
         nn_h, _, _ = np.histogram2d(x=ptcs, y=nnpk, bins=(psbs, csbs))
         om_h, _, _ = np.histogram2d(x=ptcs, y=ompk, bins=(psbs, csbs))
         pv_h, _, _ = np.histogram2d(x=ptcs, y=pvs, bins=(psbs, pvbs))
