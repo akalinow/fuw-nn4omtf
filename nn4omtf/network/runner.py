@@ -95,9 +95,8 @@ class OMTFRunner:
         }
         self.writers = self.log_hnd.copy()
 
-#        if self.params['log'] is 'none':
-#            return
-        print("Logdir: ", self.params['logdir'])
+        if self.params['log'] is 'none' and not self.params['activation_curves'] and not self.params['prob_dist']:
+            return
         fname = os.path.join(self.params['logdir'], self.params['sess_name'])
         os.makedirs(fname)
         self.logdir = fname
@@ -535,7 +534,10 @@ class OMTFRunner:
             self.save_answers()
             self.save_hist()
             self._log_deinit()
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 
     def collect_answers(self, **kw):
         if self.answers is None:
