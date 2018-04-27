@@ -534,10 +534,6 @@ class OMTFRunner:
             self.save_answers()
             self.save_hist()
             self._log_deinit()
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
 
     def collect_answers(self, **kw):
         if self.answers is None:
