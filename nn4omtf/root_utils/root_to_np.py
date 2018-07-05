@@ -5,10 +5,12 @@
 
     Methods to load ROOT dicts and convert data to Numpy format.
 
-    INFO:
-    It could be tougt to install ROOT and related python packages.
+    INFO - ROOT framework:
+    It can be tougt to install ROOT and related python packages.
     It might be easier to use Docker and download linux image with ROOT.
+    It's additional module to import ROOT data at very begining.
 
+    INFO - structure:
     This part of package is very specific. ROOT dict structure is defined by
     external program which generates data from OMTF simulation.
 """
@@ -22,22 +24,23 @@ import re
 import time
 import numpy as np
 
-from nn4omtf.dataset.const import NPZ_FIELDS
+from nn4omtf.const import NPZ_FIELDS
 
 
 def load_root_dict(path):
-    """Loads ROOT's 'omtfPatternMaker/OMTFHitsTree' dictionary file.
+    """
+    Loads ROOT's 'omtfPatternMaker/OMTFHitsTree' dictionary file.
     This method assumes that files and directory structure comes from @akalinow 
     script which generates simulation of OMTF algorithm.
-    This method is to import these ROOT files from directories
+    This method imports these ROOT files from directories
     which names match pattern "SignleMu_[0-9]+_[pm]".
-    ROOT file should be OMTFHitsData.root.
+    ROOT file should be `OMTFHitsData.root`.
 
     Args:
         path: path to directory containing mentioned ROOT file
     Returns:
         (ROOT dict dataset, dict with dataset name, pt code, muon charge sign)
-    """
+    """ 
     NAME = 'OMTFHitsData.root'
     fpath = os.path.join(path, NAME)
     basename = os.path.basename(path)
@@ -51,21 +54,25 @@ def load_root_dict(path):
 
 
 def root_to_numpy(name, sign, ptcode, data):
-    """Method to extract data from ROOT dict and pack it
+    """
+    Method extracts data from ROOT dict and packs it
     along with some info from directory name
     Extracted data:
-        - hits_18x2, - reduced hits tensor,
-        - hits_18x14 - full hits tensors, 
+        - hits 18x2, - reduced hits tensor,
+        - hits 18x14 - full hits tensors, 
         - production data,
         - omtf data.
 
-    ROOT data structure per simulation/event:
-        - Hits tensor [18, 14]
-        - Moun prodution data: {MuonPt, MuonPhi, MuonEta, MuonCharge}
-        - OMTF simulation data: {omtfCharge, omtfPt, omtfEta, omtfQuality, omtfHits, omtfRefLayer}
+    ROOT data structure per single event:
+        - Hits tensor of dimension [18, 14]
+        - Moun prodution data: 
+            (MuonPt, MuonPhi, MuonEta, MuonCharge)
+        - OMTF simulation data: 
+            (omtfCharge, omtfPt, omtfEta, omtfQuality, omtfHits, omtfRefLayer)
 
     Note: 
-        ROOT dicts are not imported as ndarray. They cannot be sliced and iterated using numpy tools.
+        ROOT dicts are not imported as ndarray. 
+        They cannot be sliced and iterated using numpy tools.
         Single dict conversion can last a few minutes.
 
     Args: 
