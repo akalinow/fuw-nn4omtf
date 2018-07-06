@@ -1,32 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-    OMTF dataset generation and balancing.
     Copyright (C) 2018 Jacek Łysiak
     MIT License
+
+    OMTF dataset generation and balancing.
 """
 
 import numpy as np
 import os
 
-class NPZ_DATASET:
-    HITS_REDUCED = 'hits_reduced'
-    PROD = 'prod'
-    OMTF = 'omtf'
+from nn4omtf.const_dataset import DATASET_TYPES, HIST_TYPES, DATA_TYPES,\
+    HIST_SCOPES, ORD_TYPES, NPZ_DATASET, DATASET_FIELDS, DSET_STAT_FIELDS
 
-DATASET_TYPES = ['TRAIN', 'VAILD', 'TEST']
-
-DATASET_FIELDS = ['HITS', 'HITS_TYPE', 'PT', 'SIGN', 'IS_NULL']
-
-class HIST_TYPES:
-    AVG = 'AVG'
-    VALS = 'VALS'
-
-class DATA_TYPES:
-    ORIG = 'ORIG'
-    TRANS = 'TRANS'
-
-HIST_TYPES = [HIST_TYPES.AVG, HIST_TYPES.VALS]
-DATA_TYPES = [DATA_TYPES.ORIG, DATA_TYPES.TRANS]
 
 class OMTFDataset:
     """
@@ -93,11 +78,10 @@ class OMTFDataset:
             containing data from all files):
       - averaged HITS per example for original and transformed input
       - HITS values for original and transformed input
-
     """
     
     def __init__(self, files, train_n, valid_n, test_n, treshold=5400., 
-            transform=(0, 600)):
+            transform=(0, 600), hist_bins=(0, 5400, 50)):
         """
         Args:
             files: list of paths to files created by ROOT-TO-NUMPY converter
@@ -108,29 +92,27 @@ class OMTFDataset:
             transform: (null value, shift value)
             
         """
+        self.hist_types = [HIST_TYPES.AVG, HIST_TYPES.VALS]
+        self.data_types = [DATA_TYPES.ORIG, DATA_TYPES.TRANS]
+        self.names = [DATASET_TYPES.TRAIN,
+                DATASET_TYPES.VALID,
+                DATASET_TYPES.TEST]
+
         self.files = files
-        
-        self.names = DATASET_TYPES
         self.phase_n = [train_n, valid_n, test_n]
-        
         self.treshold = treshold
-        
-        self.hist_types = HIST_TYPES 
-        self.data_types = DATA_TYPES
             
         # Distribution of mean HITS_ARR per example
         # It shows how many events should be considered as null examples
-        self.bins = np.linspace(0, 5400, 50)
-        
+        self.bins = np.linspace(*hist_bins)
         self.histograms = dict()
         for dtype in self.data_types:
             hists = dict()
             for htype in self.hist_types:
                 hists[htype] = {
-                    'TOTAL': np.zeros(self.bins.shape[0] - 1), 
-                    'CODE': []}
+                    HIST_SCOPES.TOTAL: np.zeros(self.bins.shape[0] - 1), 
+                    HIST_SCOPES.CODE: []}
             self.histograms[dtype] = hists
-        
         self.transform = transform
  
 
@@ -164,13 +146,14 @@ class OMTFDataset:
         return partition
     
 
-    def add_histograms_for_file(self, hits, htype='VALS', dtype='ORIG'):
+    def add_histograms_for_file(self, hits, htype=HIST_TYPES.VALS, 
+            dtype=DATA_TYPES.ORIG):
         """
         Get hits and hits averaged over single event and add histograms data.
         """
         hist, _ = np.histogram(hits, bins=self.bins)
-        self.histograms[dtype][htype]['CODE'].append(hist)
-        self.histograms[dtype][htype]['TOTAL'] += hist
+        self.histograms[dtype][htype][HIST_SCOPES.CODE].append(hist)
+        self.histograms[dtype][htype][HIST_SCOPES.TOTAL] += hist
         
 
     def dataset_validator(self, data, shuffled=False):
@@ -192,8 +175,8 @@ class OMTFDataset:
             return
         orig_hists = self.valid_hists
         self.valid_hists = {
-            'ORIG': self.valid_hists,
-            'SHUF': hists}
+            ORD_TYPES.ORIG: self.valid_hists,
+            ORD_TYPES.SHUF: hists}
         for orig, shuf in zip(orig_hists, hists):
             if not np.all(np.equal(orig, shuf)):
                 return False
@@ -205,11 +188,11 @@ class OMTFDataset:
         Apply moving average on mouns PT value arrays and check
         if examples are shuffled well.
         """
-        ps_avg = moving_avg(train_dataset[1][:, 0])
+        ps_avg = self.moving_avg(train_dataset[1][:, 0])
         if not shuffled:
-            self.train_examples_order = {'ORIG': ps_avg}
+            self.train_examples_order = {ORD_TYPES.ORIG: ps_avg}
         else:
-            self.train_examples_order['SHUF'] = ps_avg
+            self.train_examples_order[ORD_TYPES.SHUF] = ps_avg
         
 
     def generate(self):
@@ -218,17 +201,26 @@ class OMTFDataset:
         """
         partition = self.get_partition()
         dataset = dict(zip(self.names, [None] * 3))
+        signatures = []
         for fn in self.files:
+            print('Reading data from: %s' % fn)
             data = np.load(fn)
             hits = data[NPZ_DATASET.HITS_REDUCED]
             prod = data[NPZ_DATASET.PROD]
             omtf = data[NPZ_DATASET.OMTF]
+
+            signatures.append((
+                data[NPZ_DATASET.PT_CODE],
+                data[NPZ_DATASET.SIGN]))
+
             file_data = [hits, prod, omtf]
             
             # Calc histogram of original input values
             hits_avg = np.mean(hits, axis=(1,2))
-            self.add_histograms_for_file(hits, htype='VALS', dtype='ORIG')
-            self.add_histograms_for_file(hits_avg, htype='AVG', dtype='ORIG')
+            self.add_histograms_for_file(hits, htype=HIST_TYPES.VALS, 
+                    dtype=DATA_TYPES.ORIG)
+            self.add_histograms_for_file(hits_avg, htype=HIST_TYPES.AVG, 
+                    dtype=DATA_TYPES.ORIG)
             
             good_mask = hits_avg < self.treshold
             null_mask = hits_avg >= self.treshold
@@ -239,10 +231,10 @@ class OMTFDataset:
                 hits = np.where(hits >= 5400, self.transform[0], 
                         hits + self.transform[1])
                 hits_avg = np.mean(hits, axis=(1,2))
-                self.add_histograms_for_file(hits, htype='VALS', 
-                        dtype='TRANS')
-                self.add_histograms_for_file(hits_avg, htype='AVG', 
-                        dtype='TRANS')
+                self.add_histograms_for_file(hits, htype=HIST_TYPES.VALS, 
+                        dtype=DATA_TYPES.TRANS)
+                self.add_histograms_for_file(hits_avg, htype=HIST_TYPES.AVG, 
+                        dtype=DATA_TYPES.TRANS)
             
             good_data = [t[good_mask] for t in file_data]
             null_data = [t[null_mask] for t in file_data]
@@ -260,7 +252,7 @@ class OMTFDataset:
                                 zip(dataset[name], _good_data, _null_data)]
             data.close()
         
-        self.save_train_examples_ordering(dataset['TRAIN'])
+        self.save_train_examples_ordering(dataset[DATASET_TYPES.TRAIN])
         
         for name in self.names:
             rng_state = np.random.get_state()
@@ -272,30 +264,144 @@ class OMTFDataset:
             assert self.dataset_validator(dataset[name], shuffled=True), \
                     "%s dataset shuffle failed! Histograms don't match!"
         
-        self.save_train_examples_ordering(dataset['TRAIN'], shuffled=True)
+        self.save_train_examples_ordering(dataset[DATASET_TYPES.TRAIN], 
+                shuffled=True)
         self.dataset = dataset
+        self.signatures = signatures
         
         
-    def save_dataset(self, prefix):
+    def save_dataset(self, prefix, single_file=True):
+        """
+        Prepare all types of datasets with approptiate structure of elements.
+        Dataset file structure is as follows:
+            dict( [ ( phase name: dict([(data name, data values)]) ) ] )
+        If `single_file` is True, all `phase_name` entries are stored in 
+        single `*.npz` file.
+
+        # Example - loading dict structure from `*.npz` file
+        ```
+            ds_npz = np.load(ds_npz_path)
+            ds_train = ds_npz['TRAIN'].item()
+            print(ds_train['HITS']
+        ```
+        """
         data = dict()
-        data_suffix = ['_HITS', '_PROD', '_OMTF']
+
+        fields_labels = [
+            DATASET_FIELDS.HITS,
+            DATASET_FIELDS.PT_VAL,
+            DATASET_FIELDS.SIGN,
+            DATASET_FIELDS.IS_NULL]
+
+        test_fields_labels = [
+            DATASET_FIELDS.OMTF_PT,
+            DATASET_FIELDS.OMTF_SIGN]
+
+
         for k, v in self.dataset.items():
-            for suff, d in zip(data_suffix, v):
-                data[k + suff] = d            
-        np.savez_compressed(path, **data)
+            hits_avg = np.mean(v[0], axis=(1,2))
+            is_null = hits_avg >= self.treshold
+            fields = [
+                v[0],
+                v[1][:,0],
+                v[1][:,3],
+                is_null]
+            if k is not DATASET_TYPES.TEST:
+                data[k] = dict(zip(fields_labels, fields))
+            else:
+                test_fields = [
+                    v[2][:,1],
+                    v[2][:,0]]
+                data[k] = dict(zip(fields_labels + test_fields_labels, 
+                    fields + test_fields))
+        if single_file:
+            np.savez_compressed(prefix, **data)
+        else:
+            for k, v in data.items():
+                path = prefix + '-' + k.lowercase()
+                np.savez_compressed(path, **{k: v})
     
 
     def save_stats(self, path):
-        stats = {"TYPE": "DATASET_STATISTICS"}
-        stats['TRAIN_EXAMPLES_ORDERING'] = self.train_examples_order
-        np.savez_compressed(path, **stats)
+        stats = dict()
+        stats[DSET_STAT_FIELDS.TRAIN_EXAMPLES_ORDERING] = self.train_examples_order
+
+        orig = self.histograms[DATA_TYPES.ORIG]
+        trans = self.histograms[DATA_TYPES.ORIG]
+
+        stats[DSET_STAT_FIELDS.HISTS_TOTAL_ORIG] = {
+            HIST_TYPES.VALS: orig[HIST_TYPES.VALS][HIST_SCOPES.TOTAL],
+            HIST_TYPES.AVG: orig[HIST_TYPES.AVG][HIST_SCOPES.TOTAL]}
+
+        stats[DSET_STAT_FIELDS.HISTS_TOTAL_TRANS] = {
+            HIST_TYPES.VALS: trans[HIST_TYPES.VALS][HIST_SCOPES.TOTAL],
+            HIST_TYPES.AVG: trans[HIST_TYPES.AVG][HIST_SCOPES.TOTAL]}
+
+        stats[DSET_STAT_FIELDS.HISTS_ORIG] = {
+            HIST_TYPES.VALS: orig[HIST_TYPES.VALS][HIST_SCOPES.CODE],
+            HIST_TYPES.AVG: orig[HIST_TYPES.AVG][HIST_SCOPES.CODE]}
+
+        stats[DSET_STAT_FIELDS.HISTS_TRANS] = {
+            HIST_TYPES.VALS: trans[HIST_TYPES.VALS][HIST_SCOPES.CODE],
+            HIST_TYPES.AVG: trans[HIST_TYPES.AVG][HIST_SCOPES.CODE]}
+
+        stats[DSET_STAT_FIELDS.HISTS_BINS] = self.bins
+        stats[DSET_STAT_FIELDS.MUON_SIGNATURES] = self.signatures
+
+        data = {DSET_STAT_FIELDS.GROUP_NAME: stats}
+        np.savez_compressed(path, **data)
+
+
+    def get_train_examples_ordering(self):
+        '''
+        Get examples ordering arrays.
+        '''
+        return (self.train_examples_order[ORD_TYPE.ORIG], 
+            self.train_examples_order[ORD_TYPE.SHUF])
         
 
-DIR = "./orig-npz-datasets/"
-fs = os.listdir(DIR)[:4]
-files = [os.path.join(DIR, fn) for fn in fs]
 
-ds = OMTFDataset(files, 10000, 2000, 1000, transform=(0, 600))
-ds.generate()
-ds.save_dataset("dataset-test")
-ds.save_stats("dataset-stats")
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description="Dataset test")
+    parser.add_argument('--train', type=int, metavar='N', default=10000)
+    parser.add_argument('--valid', type=int, metavar='N', default=5000)
+    parser.add_argument('--test', type=int, metavar='N', default=5000)
+    parser.add_argument('--treshold', type=float, metavar='T', default=5400)
+    parser.add_argument('--transform', nargs=2, metavar=('NULL VALUE', 'SHIFT'),
+            type=int)
+    parser.add_argument('outdir', help="Output directory")
+    parser.add_argument('files', help="Examples source files", nargs='*')
+
+    FLAGS = parser.parse_args()
+    os.makedirs(FLAGS.outdir, exist_ok=True)
+
+    transform = None
+    if FLAGS.transform is not None:
+        transfrom = tuple(FLAGS.transform)
+
+    ds = OMTFDataset(FLAGS.files, FLAGS.train, FLAGS.valid, FLAGS.test, 
+            transform=transform, treshold=FLAGS.treshold)
+    ds.generate()
+    ds_path = os.path.join(FLAGS.outdir, 'dataset')
+    ds_stat = os.path.join(FLAGS.outdir, 'stats')
+    ds.save_dataset(ds_path)
+    ds.save_stats(ds_stat)
+
+    print("READING TEST DATASET FILE")
+    ds_file = np.load(ds_path + '.npz')
+    for k in ds_file.files:
+        print('>' * 10 + k)
+        for lab, arr in ds_file[k].item().items():
+            print(lab + ":")
+            print(arr[:5])
+
+    print("READING TEST DATASET STATISTICS FILE")
+    ds_file = np.load(ds_stat + '.npz')
+    for k in ds_file.files:
+        print('>' * 10 + k)
+        for lab, arr in ds_file[k].item().items():
+            print(lab + ":")
+            print(arr)
+
+
