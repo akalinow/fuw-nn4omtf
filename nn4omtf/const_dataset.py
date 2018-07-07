@@ -18,7 +18,7 @@ class NPZ_DATASET:
 
 class DATASET_TYPES:
     TRAIN = 'TRAIN'
-    VALID = 'VAILD'
+    VALID = 'VALID'
     TEST = 'TEST'
 
 
@@ -50,8 +50,11 @@ class DATASET_FIELDS:
     IS_NULL = 'IS_NULL'
 
     # Test dataset only
+    # Fields used only by statistics and ploter module!
+    # There's no need to process them along with network input data!
     OMTF_PT = 'OMTF_PT'
     OMTF_SIGN = 'OMTF_SIGN'
+    OMTF_QUALITY = 'OMTF_QUALITY'
     
 
 class DSET_STAT_FIELDS: 

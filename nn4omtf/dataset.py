@@ -113,6 +113,7 @@ class OMTFDataset:
                     HIST_SCOPES.TOTAL: np.zeros(self.bins.shape[0] - 1), 
                     HIST_SCOPES.CODE: []}
             self.histograms[dtype] = hists
+        print(transform)
         self.transform = transform
  
 
@@ -213,7 +214,6 @@ class OMTFDataset:
                 data[NPZ_DATASET.PT_CODE],
                 data[NPZ_DATASET.SIGN]))
 
-            file_data = [hits, prod, omtf]
             
             # Calc histogram of original input values
             hits_avg = np.mean(hits, axis=(1,2))
@@ -223,7 +223,9 @@ class OMTFDataset:
                     dtype=DATA_TYPES.ORIG)
             
             good_mask = hits_avg < self.treshold
+            good_n = np.sum(good_mask)
             null_mask = hits_avg >= self.treshold
+            null_n = np.sum(null_mask)
             
             if self.transform is not None:
                 # Apply data transformation
@@ -236,10 +238,12 @@ class OMTFDataset:
                 self.add_histograms_for_file(hits_avg, htype=HIST_TYPES.AVG, 
                         dtype=DATA_TYPES.TRANS)
             
+            file_data = [hits, prod, omtf]
             good_data = [t[good_mask] for t in file_data]
+            good_data += [np.zeros(good_n).astype(np.bool)]
             null_data = [t[null_mask] for t in file_data]
-            
-            file_data = []
+            null_data += [np.ones(null_n).astype(np.bool)]
+
             for (gb, ge, nb, ne), name  in zip(partition, self.names):
                 _good_data = [_data[gb:ge] for _data in good_data]
                 _null_data = [_data[nb:ne] for _data in null_data]
@@ -257,7 +261,7 @@ class OMTFDataset:
         for name in self.names:
             rng_state = np.random.get_state()
             self.dataset_validator(dataset[name])
-            for i in range(3):
+            for i in range(len(dataset[name])):
                 # Shuffle each array in same way
                 np.random.shuffle(dataset[name][i])
                 np.random.set_state(rng_state)
@@ -295,23 +299,23 @@ class OMTFDataset:
 
         test_fields_labels = [
             DATASET_FIELDS.OMTF_PT,
-            DATASET_FIELDS.OMTF_SIGN]
+            DATASET_FIELDS.OMTF_SIGN,
+            DATASET_FIELDS.OMTF_QUALITY]
 
 
         for k, v in self.dataset.items():
-            hits_avg = np.mean(v[0], axis=(1,2))
-            is_null = hits_avg >= self.treshold
             fields = [
                 v[0],
                 v[1][:,0],
                 v[1][:,3],
-                is_null]
+                v[3]]
             if k is not DATASET_TYPES.TEST:
                 data[k] = dict(zip(fields_labels, fields))
             else:
                 test_fields = [
                     v[2][:,1],
-                    v[2][:,0]]
+                    v[2][:,0],
+                    v[2][:,3]]
                 data[k] = dict(zip(fields_labels + test_fields_labels, 
                     fields + test_fields))
         if single_file:
@@ -378,7 +382,7 @@ if __name__ == '__main__':
 
     transform = None
     if FLAGS.transform is not None:
-        transfrom = tuple(FLAGS.transform)
+        transform = tuple(FLAGS.transform)
 
     ds = OMTFDataset(FLAGS.files, FLAGS.train, FLAGS.valid, FLAGS.test, 
             transform=transform, treshold=FLAGS.treshold)
