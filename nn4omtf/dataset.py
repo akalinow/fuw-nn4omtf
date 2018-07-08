@@ -209,10 +209,9 @@ class OMTFDataset:
             hits = data[NPZ_DATASET.HITS_REDUCED]
             prod = data[NPZ_DATASET.PROD]
             omtf = data[NPZ_DATASET.OMTF]
-
-            signatures.append((
-                data[NPZ_DATASET.PT_CODE],
-                data[NPZ_DATASET.SIGN]))
+            code = data[NPZ_DATASET.PT_CODE]
+            sign = data[NPZ_DATASET.SIGN]
+            signatures.append((code, sign))
 
             
             # Calc histogram of original input values
@@ -241,8 +240,10 @@ class OMTFDataset:
             file_data = [hits, prod, omtf]
             good_data = [t[good_mask] for t in file_data]
             good_data += [np.zeros(good_n).astype(np.bool)]
+            good_data += [np.ones(good_n) * code]
             null_data = [t[null_mask] for t in file_data]
             null_data += [np.ones(null_n).astype(np.bool)]
+            null_data += [np.ones(null_n) * code]
 
             for (gb, ge, nb, ne), name  in zip(partition, self.names):
                 _good_data = [_data[gb:ge] for _data in good_data]
@@ -295,7 +296,8 @@ class OMTFDataset:
             DATASET_FIELDS.HITS,
             DATASET_FIELDS.PT_VAL,
             DATASET_FIELDS.SIGN,
-            DATASET_FIELDS.IS_NULL]
+            DATASET_FIELDS.IS_NULL,
+            DATASET_FIELDS.PT_CODE]
 
         test_fields_labels = [
             DATASET_FIELDS.OMTF_PT,
@@ -308,7 +310,8 @@ class OMTFDataset:
                 v[0],
                 v[1][:,0],
                 v[1][:,3],
-                v[3]]
+                v[3],
+                v[4]]
             if k is not DATASET_TYPES.TEST:
                 data[k] = dict(zip(fields_labels, fields))
             else:
@@ -362,50 +365,27 @@ class OMTFDataset:
         '''
         return (self.train_examples_order[ORD_TYPE.ORIG], 
             self.train_examples_order[ORD_TYPE.SHUF])
-        
 
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description="Dataset test")
-    parser.add_argument('--train', type=int, metavar='N', default=10000)
-    parser.add_argument('--valid', type=int, metavar='N', default=5000)
-    parser.add_argument('--test', type=int, metavar='N', default=5000)
-    parser.add_argument('--treshold', type=float, metavar='T', default=5400)
-    parser.add_argument('--transform', nargs=2, metavar=('NULL VALUE', 'SHIFT'),
-            type=int)
-    parser.add_argument('outdir', help="Output directory")
-    parser.add_argument('files', help="Examples source files", nargs='*')
+    def show(path, n=5):
+        npz = np.load(path)
+        if DSET_STAT_FIELDS.GROUP_NAME in npz.files:
+            OMTFDataset._show_stats(npz[DSET_STAT_FIELDS.GROUP_NAME].item())
+        for name in [n for n in vars(DATASET_TYPES) if not n.startswith('_')]:
+            if name in npz.files:
+                OMTFDataset._show_dataset(name, npz[name].item(), n)
 
-    FLAGS = parser.parse_args()
-    os.makedirs(FLAGS.outdir, exist_ok=True)
 
-    transform = None
-    if FLAGS.transform is not None:
-        transform = tuple(FLAGS.transform)
+    def _show_dataset(name, data, n):
+        print('=' * 10 + ' DATASET ' + name)
+        for label, arr in data.items():
+            print(label+ ":")
+            print(arr[:n])
 
-    ds = OMTFDataset(FLAGS.files, FLAGS.train, FLAGS.valid, FLAGS.test, 
-            transform=transform, treshold=FLAGS.treshold)
-    ds.generate()
-    ds_path = os.path.join(FLAGS.outdir, 'dataset')
-    ds_stat = os.path.join(FLAGS.outdir, 'stats')
-    ds.save_dataset(ds_path)
-    ds.save_stats(ds_stat)
 
-    print("READING TEST DATASET FILE")
-    ds_file = np.load(ds_path + '.npz')
-    for k in ds_file.files:
-        print('>' * 10 + k)
-        for lab, arr in ds_file[k].item().items():
-            print(lab + ":")
-            print(arr[:5])
-
-    print("READING TEST DATASET STATISTICS FILE")
-    ds_file = np.load(ds_stat + '.npz')
-    for k in ds_file.files:
-        print('>' * 10 + k)
-        for lab, arr in ds_file[k].item().items():
-            print(lab + ":")
-            print(arr)
-
+    def _show_stats(data):
+        print('=' * 10 + ' DATASET INFO')
+        print("Included signatures:")
+        for c, s in data[DSET_STAT_FIELDS.MUON_SIGNATURES]:
+            print('pt code: %d sign: %s' % (c, s))
 

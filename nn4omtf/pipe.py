@@ -81,7 +81,6 @@ class OMTFInputPipe:
         self.iterator = self.build_pipe(dataset_type, **self.dataset)
         self.initializer = self.iterator.initializer
         self.next_op = self.iterator.get_next()
-
         self.session = None
 
 
@@ -146,6 +145,9 @@ class OMTFInputPipe:
             return self.session.run(self.next_op)
         except tf.errors.OutOfRangeError:
             return None
+
+    def get_initializer_and_op(self):
+        return self.initializer, self.next_op
    
 
 # ===== TEST

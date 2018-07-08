@@ -48,6 +48,8 @@ class DATASET_FIELDS:
     PT_VAL = 'PT_VAL'
     SIGN = 'SIGN'
     IS_NULL = 'IS_NULL'
+    # pt code can be used also to characterizing train dataset
+    PT_CODE = 'PT_CODE' 
 
     # Test dataset only
     # Fields used only by statistics and ploter module!
