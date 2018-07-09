@@ -1,4 +1,3 @@
-from nn4omtf.cli.dataset_tool import OMTFDatasetTool
 
 
 def import_root_utils():

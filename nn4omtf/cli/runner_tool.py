@@ -7,6 +7,7 @@
 """
 
 
+from nn4omtf import OMTFModel
 from nn4omtf.cli.runner_tool_config import ACTION, parser_config
 from nn4omtf.cli.utils import create_parser
 

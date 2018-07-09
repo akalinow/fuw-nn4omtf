@@ -9,7 +9,7 @@
 import json
 
 
-class OMTFNetwork:
+class OMTFModel:
     """
     Network model manager.
 
