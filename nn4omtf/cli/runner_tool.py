@@ -3,11 +3,12 @@
     Copyright (C) 2018 Jacek Łysiak
     MIT License
 
-    OMTF trainer tool
+    Main OMTFModel tool.
+    Creates, trains and tests models.
 """
 
 
-from nn4omtf import OMTFModel
+from nn4omtf import OMTFModel, OMTFRunner
 from nn4omtf.cli.runner_tool_config import ACTION, parser_config
 from nn4omtf.cli.utils import create_parser
 
@@ -16,6 +17,7 @@ class OMTFRunnerTool:
 
     def __init__(self):
         self.parser = create_parser(parser_config, desc="OMTF NN trainer")
+
 
     def run(self):
         FLAGS = self.parser.parse_args()
@@ -32,22 +34,39 @@ class OMTFRunnerTool:
         else:
             self.parser.print_help()
     
+
     def _show(self, opts):
-        pass
+        model = OMTFModel(opts.model)
+        print(str(model))
 
     
     def _create(self, opts):
-        pass
-
+        path = '.' if opts.outdir is None else opts.outdir
+        path = os.path.join(path, opts.name)
+        model = OMTFModel.create_new_model_with_builder_file(
+                model_directory=path,
+                builder_file=opts.builder_file,
+                vars(opts))
+        print("\nCreated!\n")
+        print(str(model))
+ 
 
     def _train(self, opts):
-        pass
+        model = OMTFModel(opts.model, vars(opts))
+        if opts.update_config:
+            model.update_config()
+        print("\nLoaded!\n")
+        print(str(model))
+        runner = OMTFRunner()
+        runner.train(model, vars(opts))
 
 
     def _test(self, opts):
-        pass
-
-
-
-
+        model = OMTFModel(opts.model, vars(opts))
+        if opts.update_config:
+            model.update_config()
+        print("\nLoaded!\n")
+        print(str(model))
+        runner = OMTFRunner()
+        runner.test(model, vars(opts))
 

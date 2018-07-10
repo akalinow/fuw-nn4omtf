@@ -8,21 +8,17 @@
 
 
 class OMTFRunner:
-    def __init__(self, omtf_network):
-        """
-        Args:
-            omtf_network: omtf network object
-        """
-        self.model = omtf_network
-
 
     def timer_start(self):
         pass
 
 
-    def train(self, **kw):
+    def train(self, model, no_checkpoints=False, time_limit=None, epochs=1, **opts):
         """
         Run model training.
+        Args:
+            model: OMTFModel instance
+
         """
         tf.reset_default_graph()
         self.x_ph = tf.placeholder(tf.int32)
