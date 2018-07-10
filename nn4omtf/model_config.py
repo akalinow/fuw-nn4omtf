@@ -9,7 +9,8 @@
 # Keys used also in CLI
 
 model_hparams_keys = ['lrate', 'batch_size']
-model_config_keys = ['ds_train', 'ds_valid', 'ds_test', 'gpu']
+model_config_keys_datasets = ['ds_train', 'ds_valid', 'ds_test'] 
+model_config_keys = model_config_keys_datasets + ['gpu']
 
 
 # Model default values
@@ -29,7 +30,7 @@ _default_config_values = [None] * 3 + [
 _default_hparams = dict(zip(model_hparams_keys, _default_hparams_values))
 _default_config = dict(zip(model_config_keys, _default_config_values))
 
-MODEL_DATA_MAIN = {
+model_data_default = {
     'hparams' : _default_hparams,
     'config' : _default_config,
 }
