@@ -8,7 +8,7 @@
 
 
 import json
-from nn4omtf.utils import dict_to_object, get_source_of_object, json_to_dict,\
+from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
         dict_to_json, import_module_from_path 
 
 

@@ -12,14 +12,6 @@ import os
 import inspect
 
 
-__all__ = [
-        'import_module_from_path', 
-        'get_from_module_by_name', 
-        'get_source_of_obj',
-        'dict_to_object'
-        ]
-
-
 def import_module_from_path(path):
     """Import python code from path."""
     name = os.path.basename(path).split(".")[0]
