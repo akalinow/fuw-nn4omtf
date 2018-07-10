@@ -7,10 +7,12 @@
 """
 
 
-import json
+import os
 from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
-        dict_to_json, import_module_from_path 
-
+        dict_to_json, import_module_from_path, get_from_module_by_name,\
+        dict_to_json_string
+from nn4omtf.model_config import model_data_default, model_hparams_keys,\
+        model_config_keys, model_config_keys_datasets 
 
 class OMTFModel:
     """
@@ -69,7 +71,7 @@ class OMTFModel:
         self.paths = OMTFModel._get_paths(model_directory)
 
         # Load actual model data
-        self.model_data = json_do_dict(self.paths.model_file)
+        self.model_data = json_to_dict(self.paths.file_model)
         self._update_model_data_with_opts(**opts)
 
 
@@ -77,7 +79,7 @@ class OMTFModel:
         """
         Save actual model data in model config file.
         """
-        dict_to_json(self.paths.model_file, self.model_data)
+        dict_to_json(self.paths.file_model, self.model_data)
 
 
     def get_dataset_paths(self):
@@ -102,10 +104,8 @@ class OMTFModel:
 
         Method just compile python source file and takes function code.
         """
-        mod = utils.import_module_from_path(path=builder_file)
-        fn = utils.get_from_module_by_name(
-                mod=mod, 
-                name=OMTFModel.MODEL_BUILDER_FUNC)
+        mod = import_module_from_path(path=builder_file)
+        fn = get_from_module_by_name(mod=mod, name=OMTFModel.FUNC_BUILDER)
         model = OMTFModel.create_new_model_with_builder_fn(model_directory, fn, **opts)
         return model
 
@@ -123,7 +123,7 @@ class OMTFModel:
         paths =  OMTFModel._get_paths(model_directory)
         # Save builder code
         builder_code = get_source_of_obj(builder_fn)
-        builder_file = paths.builder_file
+        builder_file = paths.file_builder
         with open(builder_file, 'w') as f:
             f.write(builder_code)
         # Save default model data
@@ -132,7 +132,7 @@ class OMTFModel:
         # Load default object with some options ...
         model = OMTFModel(
                 model_directory=model_directory,
-                builder_fn=fn,
+                builder_fn=builder_fn,
                 **opts)
         # ... and then save
         model.update_config()
@@ -148,7 +148,7 @@ class OMTFModel:
                 name=OMTFModel.MODEL_BUILDER_FUNC)
 
 
-    def _update_model_data_with_opts(**opts):
+    def _update_model_data_with_opts(self, **opts):
         """
         Update model data using given opts.
         NOTE: dataset paths are converted to absolute path form
@@ -159,7 +159,7 @@ class OMTFModel:
             if k in model_hparams_keys:
                 self.model_data['hparams'][k] = v
             if k in model_config_keys:
-                if k in model_config_keys_datasets and not os.path.isabs(v):
+                if v is not None and k in model_config_keys_datasets and not os.path.isabs(v):
                     v = os.path.abspath(v)
                 self.model_data['config'][k] = v
 
@@ -173,8 +173,9 @@ class OMTFModel:
         Returns:
             Namespace with all important model paths and directories.
         """
-        _model_paths_values[0] = root_path
-        _paths = dict(zip(_model_paths_fields, _model_paths_values))
+        paths = [os.path.join(root_path, v) for v in OMTFModel._model_paths_values[1:]]
+        paths = [root_path] + paths
+        paths = dict(zip(OMTFModel._model_paths_fields, paths))
         return dict_to_object(paths) 
 
 
@@ -188,12 +189,10 @@ class OMTFModel:
         Args:
             root_dir: root model directory
         """
+        paths = OMTFModel._get_paths(root_dir)
         os.makedirs(root_dir)
-        dirs = [v for (n, v) in 
-                zip(OMTFModel._model_paths_fields, OMTFModel._model_paths_values) 
-                if n.startswith('dir')]
+        dirs = [v for (k, v) in vars(paths).items() if k.startswith('dir')]
         for d in dirs:
-            path = os.path.join(root_dir, d)
-            os.makedirs(path)
+            os.makedirs(d, exist_ok=True)
 
 

@@ -7,7 +7,7 @@
     Creates, trains and tests models.
 """
 
-
+import os
 from nn4omtf import OMTFModel, OMTFRunner
 from nn4omtf.cli.runner_tool_config import ACTION, parser_config
 from nn4omtf.cli.utils import create_parser
@@ -45,8 +45,7 @@ class OMTFRunnerTool:
         path = os.path.join(path, opts.name)
         model = OMTFModel.create_new_model_with_builder_file(
                 model_directory=path,
-                builder_file=opts.builder_file,
-                vars(opts))
+                **vars(opts))
         print("\nCreated!\n")
         print(str(model))
  

@@ -20,57 +20,43 @@ class OMTFRunner:
             model: OMTFModel instance
 
         """
-        tf.reset_default_graph()
-        self.x_ph = tf.placeholder(tf.int32)
-        self.y_ph = tf.placeholder(tf.int32)
-        self.ind_ph = tf.placeholder(tf.bool)
-
-        mconf = self.model.get_config()
-
-        device = '/cpu:0'
-        if mconf.use_gpu:
-            device = '/gpu:0'
-
-        with tf.device(device):
-            out_logits, pt_bins, ?? = self.model.build_network(self.x_ph)
-            self.ops = self.build_trainer(out_logits)
-
-        ds_path_train, ds_path_valid, _ = mconf.dataset_paths
+        self._build()
 
         with tf.name_scope("input_pipes"):
-            pipe_train = OMTFInputPipe(ds_path_train, DATASET_TYPE.TRAIN, 
-                    pt_bins, batch_size=mconf.batch_size)
-            self.pipe_valid = OMTFInputPipe(ds_path_valid, DATASET_TYPE.VALID, 
-                    pt_bins, batch_size=mconf.batch_size)
+            pipe_train = OMTFInputPipe(self.model_config.ds_train, 
+                    DATASET_TYPE.TRAIN, self.pt_bins, 
+                    batch_size=model_hparams.batch_size)
+            self.pipe_valid = OMTFInputPipe(model_config.ds_valid, 
+                    DATASET_TYPE.VALID, pt_bins, 
+                    batch_size=model_hparams.batch_size)
             t_init, t_next = pipe_train.get_initializer_and_op()
  
         with tf.Session() as sess:
             batch_n = 0
             self.timer_start()
             try:
-                for epoch_n in range(tconf.epochs):
-                    t_init.run()
-                    print("Epoch %d started!" % epoch_n)
-                    while True:
-                        batch_n += 1
-                        xs, ys = sess.run(t_next)
-                        feed = {self.x_ph: xs, y_ph: ys, ind_ph: True}
-                        
-                        if batch_n % tconf.train_log_ival == 0:
-                            b_loss, b_acc, b_summ, _ = sess.run(
-                                [op_loss, op_acc, op_summ, op_train],
-                                feed_dict=feed)
-                        else:
-                            sess.run(op_train, feed_dict=feed)
+                for epoch_n in range(epochs):
+                    try:
+                        t_init.run()
+                        print("Epoch %d started!" % epoch_n)
+                        while True:
+                            batch_n += 1
+                            xs, ys = sess.run(t_next)
+                            feed = {self.x_ph: xs, y_ph: ys, ind_ph: True}
+                            
+                            if batch_n % tconf.train_log_ival == 0:
+                                b_loss, b_acc, b_summ, _ = sess.run([op_loss, op_acc, op_summ, op_train], feed_dict=feed)
+                            else:
+                                sess.run(op_train, feed_dict=feed)
 
-                        if batch_n % tconf.validation_ival == 0:
-                            v_loss, v_acc, v_summ = self._validate()
+                            if batch_n % tconf.validation_ival == 0:
+                                v_loss, v_acc, v_summ = self._validate()
 
-                except tf.errors.OutOfRangeError:
-                    print("Epoch %d - finished!" % epoch_n)
-                    v_loss, v_acc, v_summ= self._validate()
-                    self.model.log_add_epoch_result(epoch_n, v_loss, v_acc)
-                    self.model.save()
+                    except tf.errors.OutOfRangeError:
+                        print("Epoch %d - finished!" % epoch_n)
+                        v_loss, v_acc, v_summ= self._validate()
+                        self.model.log_add_epoch_result(epoch_n, v_loss, v_acc)
+                        self.model.save()
 
             except KeyboardInterrupt:
                 print("Training stopped by user!")
@@ -94,30 +80,12 @@ class OMTFRunner:
         stats, summ = sess.run([op_stat, op_summ])
 
 
-    def _build_network(self):
-        device = '/cpu:0'
-        if mconf.use_gpu:
-            device = '/gpu:0'
-        with tf.device(device):
-        out_logits, pt_bins, ?? = self.model.build_network(x_ph)
-        pass
-
-
     def test(self):
         """
         Run model test.
         Pass whole TEST dataset through network and save raw logits.
         """
-        tf.reset_default_graph()
-        x_ph = tf.placeholder(tf.int32)
-        y_ph = tf.placeholder(tf.int32)
-        ind_ph = tf.placeholder(tf.bool)
-
-        mconf = self.model.get_config()
-
-        ops = self.build_network()
-
-        _, _, ds_path_test = mconf.dataset_paths
+        self._build()
 
         with tf.name_scope("input_pipes"):
             pipe_test = OMTFInputPipe(ds_path_test, DATASET_TYPE.TEST, 
@@ -146,4 +114,29 @@ class OMTFRunner:
 
             except KeyboardInterrupt:
                 print("Test stopped by user!")
+
+    def _build(self):
+        tf.reset_default_graph()
+
+        builder_func = self.model.get_builder_func()
+        model_config = self.model.get_config()
+        model_hparams = self.model.get_hparams()
+
+        # HIST array placeholder, dim(x) = 3, batch of 2D HITS arrays
+        HITS_REDUCED_SHAPE = [18, 2]
+        self.x_ph = tf.placeholder(tf.int32)
+        # Labels placeholder - dim(y) = 1, batch of out class indexes
+        self.y_ph = tf.placeholder(tf.int32, shape=[None])
+        # Training phase indicator - boolean
+        self.training_ind_ph = tf.placeholder(tf.bool)
+
+
+        device = '/cpu:0'
+        if model_config.gpu:
+            device = '/gpu:0'
+
+        with tf.device(device):
+            out_logits, pt_bins = builder_func(self.x_ph, 
+                    HITS_REDUCED_SHAPE, self.training_ind_ph)
+            self.ops = self.build_trainer(out_logits)
 

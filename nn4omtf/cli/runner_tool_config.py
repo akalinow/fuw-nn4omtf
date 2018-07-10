@@ -16,7 +16,7 @@ class ACTION:
 
 
 model_hparams_opts_args = [
-    {'help': 'Set learning rate'},
+    {'help': 'Set learning rate', 'type': float, 'default': 0.001},
     {'help': 'Set batch size', 'type': int, 'default': 32}
 ]
 
@@ -30,7 +30,7 @@ model_config_opts_args = [
 
 
 model_hparams_opts = [(x, y) for x, y in zip(model_hparams_keys, model_hparams_opts_args)]
-model_config_opts = [(x, y) for x, y in zip(model_config_keys, model_hparams_opts_args)]
+model_config_opts = [(x, y) for x, y in zip(model_config_keys, model_config_opts_args)]
 
 
 parser_config = {
