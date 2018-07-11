@@ -6,7 +6,7 @@
     Network model manager
 """
 
-
+import tensorflow as tf
 import os
 from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
         dict_to_json, import_module_from_path, get_from_module_by_name,\
@@ -46,6 +46,7 @@ class OMTFModel:
 
         'file_model', 
         'file_builder',
+        'checkpoint_prefix'
     ]
 
     _model_paths_values = [
@@ -56,7 +57,8 @@ class OMTFModel:
         'test-outputs',
         
         'model.json',
-        'builder.py'
+        'builder.py',
+        'checkpoints/ckpt'
     ]
 
 
@@ -165,6 +167,32 @@ class OMTFModel:
         Get model data as namespace.
         """
         return dict_to_object(self.model_data['config'])
+
+
+    def restore(self, sess):
+        """
+        Restore model within TensorFlow session.
+        Returns:
+            True, if checkpoint was restored.
+            False, if checkpoint doesn't exist.
+            Raises exception if restoring failes.
+        """
+        self.saver = tf.train.Saver() 
+        if tf.train.checkpoint_exists(self.paths.checkpoint_prefix):
+            self.saver.restore(sess, self.paths.checkpoint_prefix) 
+            print("Checkpoint restored!")
+            return True
+
+        return False
+
+
+    def tb_add_summary(self, n, summ):
+        pass
+
+
+    def save_model(self, sess):
+        self.saver.save(sess, self.paths.checkpoint_prefix)
+        print("Model saved!")
 
 
     def _update_model_data_with_opts(self, **opts):

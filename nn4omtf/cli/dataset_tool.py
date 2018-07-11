@@ -7,6 +7,7 @@
 """
 
 import nn4omtf
+import os
 from nn4omtf.dataset import OMTFDataset
 from nn4omtf.cli.dataset_tool_config import ACTION, parser_config
 from nn4omtf.cli.utils import create_parser

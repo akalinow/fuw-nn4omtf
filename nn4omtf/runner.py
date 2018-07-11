@@ -13,6 +13,8 @@ from nn4omtf.const_dataset import DATASET_TYPES
 
 class OMTFRunner:
 
+    LOG_TEMPLATE = '{:^7s}, epoch: {:4d} batch: {:4d} loss: {:.4f} acc: {:.4f}'
+
     def timer_start(self):
         pass
 
@@ -38,7 +40,13 @@ class OMTFRunner:
                     batch_size=self.model_hparams.batch_size)
             t_init, t_next = self.pipe_train.get_initializer_and_op()
  
+        self.train_summary_ival = 100
+        self.validation_ival = 10000
+
         with tf.Session() as sess:
+            if not self.model.restore(sess):
+                tf.global_variables_initializer().run()
+
             batch_n = 0
             self.timer_start()
             try:
@@ -52,42 +60,42 @@ class OMTFRunner:
                             feed = {self.x_ph: xs, 
                                 self.y_ph: ys, 
                                 self.training_ind_ph: True}
-                            print(batch_n, batch_n * xs.shape[0], xs.shape)
-
-                            if batch_n % 1000 == 0: #tconf.train_log_ival == 0:
-                                b_loss, b_acc, b_summ, _ = sess.run([op_loss, op_acc, op_summ, op_train], feed_dict=feed)
+                            if batch_n % self.train_summary_ival == 0:
+                                run_list = [
+                                    self.ops.loss,
+                                    self.ops.acc,
+                                    self.ops.t_summaries,
+                                    self.ops.step
+                                ]
+                                b_loss, b_acc, b_summ, _ = sess.run(run_list, 
+                                        feed_dict=feed)
+                                self.print_log('TRAIN', epoch_n, batch_n, b_loss, b_acc)
+                                self.model.tb_add_summary(batch_n, b_summ)
                             else:
                                 sess.run(self.ops.step, feed_dict=feed)
 
-                            if batch_n % tconf.validation_ival == 0:
-                                v_loss, v_acc, v_summ = self._validate()
+                            if batch_n % self.validation_ival == 0:
+                                v_loss, v_acc, v_summ = self._validate(sess)
+                                self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
 
                     except tf.errors.OutOfRangeError:
                         print("Epoch %d - finished!" % epoch_n)
-                        v_loss, v_acc, v_summ= self._validate()
-                        self.model.log_add_epoch_result(epoch_n, v_loss, v_acc)
-                        self.model.save()
+                        v_loss, v_acc, v_summ = self._validate(sess)
+                        self.model.tb_add_summary(batch_n, v_summ)
+                        self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
+
+                        if not no_checkpoints:
+                            self.model.save_model(sess)
 
             except KeyboardInterrupt:
                 print("Training stopped by user!")
 
-            self.model.save()
+            if not no_checkpoints:
+                self.model.save_model(sess)
 
-    def _validate(self):
-        v_init, v_next = self.pipe_valid.get_initializer_and_op()
-        op_update = self.ops['valid_update']
-        op_stat = self.ops['valid_stat']
-        op_summ = self.ops['valid_summ']
-        v_init.run()
-        try:
-            while True:
-                xs, ys = sess.run(v_next)
-                feed = {self.x_ph: xs, self.y_ph: ys, self.ind_ph: False}
-                sess.run(op_update, feed_dict=feed)
 
-        except tf.errors.OutOfRangeError:
-            pass
-        stats, summ = sess.run([op_stat, op_summ])
+    def print_log(self, phase, epoch, n, loss, acc):
+        print(OMTFRunner.LOG_TEMPLATE.format(phase, epoch, n, loss, acc))
 
 
     def test(self):
@@ -124,6 +132,34 @@ class OMTFRunner:
 
             except KeyboardInterrupt:
                 print("Test stopped by user!")
+
+
+    def _validate(self, sess):
+        """
+        Run model validation on VALID dataset.
+        Args:
+            sess: open TF session
+        Returns:
+            Cummulative validation results over whole dataset
+            tuple (loss, accuracy, TB summaries includes loss and acc)
+        """
+        v_init, v_next = self.pipe_valid.get_initializer_and_op()
+        v_init.run()
+        self.ops.metrics_init.run()
+        try:
+            while True:
+                xs, ys = sess.run(v_next)
+                feed = {self.x_ph: xs, 
+                    self.y_ph: ys, 
+                    self.training_ind_ph: False}
+                sess.run(self.ops.metrics_update, feed_dict=feed)
+        except tf.errors.OutOfRangeError:
+            pass
+        run_list = [
+            self.ops.loss_cum,
+            self.ops.acc_cum,
+            self.ops.v_summaries]
+        return sess.run(run_list)
 
 
     def _build(self):
@@ -218,5 +254,4 @@ wrong dimension!")
             't_summaries': t_summaries,
             'v_summaries': v_summaries
         })
-        print(self.ops)
 
