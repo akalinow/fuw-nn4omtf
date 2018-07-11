@@ -10,9 +10,6 @@
 import numpy as np
 
 
-__all__ = ['save_dict_as_npz', 'load_dict_from_npz']
-
-
 def save_dict_as_npz(path, **kw):
     """Save dict passed as kwargs into *.npz file.
     This dict will be reflected in archive.

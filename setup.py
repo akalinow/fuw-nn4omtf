@@ -2,11 +2,18 @@
 from os import path
 from codecs import open
 from setuptools import setup, find_packages
+from sys import argv
 
 here = path.abspath(path.dirname(__file__))
 
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
+
+use_gpu = False
+
+tensorflow = 'tensorflow'
+if use_gpu:
+    tensorflow += '-gpu'
 
 setup(
         name='nn4omtf',
@@ -24,6 +31,7 @@ setup(
             'Programming Language :: Python :: 3.5'
             ],
         python_requires='>=3.5',
-        install_requires=['tensorflow>=1.6.0', 'numpy', 'matplotlib', 'ipython'], # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
+        # Those are obligatory. ROOT lib is required in one sub-lib, however it's hard to install
+        install_requires=[tensorflow + '>=1.4.0', 'numpy', 'matplotlib', 'ipython'], 
         packages=find_packages()
     )
