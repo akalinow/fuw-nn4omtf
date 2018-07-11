@@ -117,6 +117,12 @@ class OMTFModel:
             model_directory: path to root model directory
             builder_fn: function TODO: add signature!
             **opts: model data options which should be saved
+
+        Note: 
+            It's very important to return unscaled logits as a result 
+            of `create_nn` builder funciton. Softmax op will be applied
+            to it in trainer internals.
+
         """
         # Crete directory structure first
         OMTFModel._create_structure(model_directory)
@@ -144,8 +150,21 @@ class OMTFModel:
         Loads builder function from source file.
         """
         mod = import_module_from_path(path=self.paths.file_builder)
-        return utils.get_from_module_by_name(mod=mod, 
-                name=OMTFModel.MODEL_BUILDER_FUNC)
+        return get_from_module_by_name(mod=mod, name=OMTFModel.FUNC_BUILDER)
+
+
+    def get_hparams(self):
+        """
+        Get model hyperparameters
+        """
+        return dict_to_object(self.model_data['hparams'])
+
+
+    def get_config(self):
+        """
+        Get model data as namespace.
+        """
+        return dict_to_object(self.model_data['config'])
 
 
     def _update_model_data_with_opts(self, **opts):
@@ -156,6 +175,8 @@ class OMTFModel:
             **opts: options
         """
         for k, v in opts.items():
+            if v is None:
+                continue
             if k in model_hparams_keys:
                 self.model_data['hparams'][k] = v
             if k in model_config_keys:

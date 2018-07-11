@@ -16,8 +16,8 @@ class ACTION:
 
 
 model_hparams_opts_args = [
-    {'help': 'Set learning rate', 'type': float, 'default': 0.001},
-    {'help': 'Set batch size', 'type': int, 'default': 32}
+    {'help': 'Set learning rate', 'type': float},
+    {'help': 'Set batch size', 'type': int}
 ]
 
 
@@ -55,7 +55,7 @@ parser_config = {
             ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'})
         ],
         'pos': [
-            ('model', {'help': "Directory of model to be trained"}),
+            ('model_dir', {'help': "Directory of model to be trained"}),
         ]
     },
 
@@ -65,7 +65,7 @@ parser_config = {
             ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'})
         ],
         'pos': [
-            ('model', {'help': "Directory of model to be tested"}),
+            ('model_dir', {'help': "Directory of model to be tested"}),
         ]
     },
 
@@ -73,7 +73,7 @@ parser_config = {
         'help': "Preview model data",
         'opts': [],
         'pos': [
-            ('model', {'help': "Directory of model to be shown"}),
+            ('model_dir', {'help': "Directory of model to be shown"}),
         ]
     }
 }
