@@ -45,8 +45,8 @@ class OMTFDatasetTool:
         ds = OMTFDataset(FLAGS.files, FLAGS.train, FLAGS.valid, FLAGS.test, 
                 transform=transform, treshold=FLAGS.treshold)
         ds.generate()
-        ds_path = os.path.join(path, FLAGS.file_pref, '-dataset')
-        ds_stat = os.path.join(path, FLAGS.file_pref, '-stats')
+        ds_path = os.path.join(path, FLAGS.file_pref + '-dataset')
+        ds_stat = os.path.join(path, FLAGS.file_pref + '-stats')
         ds.save_dataset(ds_path)
         ds.save_stats(ds_stat)
 
