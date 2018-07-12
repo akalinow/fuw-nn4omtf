@@ -1,11 +1,14 @@
+
 install-cpu:
-	pip install -e . --global-option="--use-cpu"
+	pip install tensorflow
+	pip install -e .
 
 install-gpu:
-	pip install -e . --install-option="--use-gpu"
+	pip install tensorflow-gpu
+	pip install -e . 
 
 clean:
 	find . -name "__pycache__" -delete
 	rm -r *-egg-info
 
-.PHONY: clean
+.PHONY: clean install-cpu install-gpu
