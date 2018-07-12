@@ -229,7 +229,8 @@ class OMTFModel:
 
 
     def __str__(self):
-        return dict_to_json_string(self.model_data)
+        return ">>> MODEL DATA:\n" + dict_to_json_string(self.model_data) + \
+                ">>>>>>>>>>>>>>"
     
 
     def _create_structure(root_dir):

@@ -7,25 +7,54 @@
 """
 
 import tensorflow as tf
+import time
 from nn4omtf import OMTFInputPipe
-from nn4omtf.utils import dict_to_object
+from nn4omtf.utils import dict_to_object, to_sec
 from nn4omtf.const_dataset import DATASET_TYPES
 
 class OMTFRunner:
 
     LOG_TEMPLATE = '{:^7s}, epoch: {:4d} batch: {:4d} loss: {:.4f} acc: {:.4f}'
 
-    def timer_start(self):
-        pass
+    def timer_start(self, time_limit=None):
+        self.time_start = time.time()
+        self.time_last = self.time_start
+        self.time_ival = 0
+        self.time_elapsed = 0
+        if time_limit is None:
+            self.time_limit = None
+        else:
+            print("Time limit was set to " + time_limit)
+            self.time_limit = self.time_start + to_sec(time_limit)
 
 
-    def train(self, model, no_checkpoints=False, time_limit=None, epochs=1, **opts):
+    def timer_tick(self):
+        now = time.time()
+        self.time_ival = now - self.time_last
+        self.time_elapsed = now - self.time_start
+        self.time_last = now
+        print("Elapsed [s]: %f, Interval [s]: %f" % (self.time_elapsed, self.time_ival))
+
+
+    def timer_should_stop(self):
+        if self.time_limit is None:
+            return False
+        else:
+            return time.time() > self.time_limit
+
+
+    def train(self, model, no_checkpoints=False, time_limit=None, epochs=1, 
+            train_summary_ival=None, validation_ival=None, **opts):
         """
         Run model training.
         Args:
             model: OMTFModel instance
 
         """
+        get_def = lambda x, y: y if x is None else x
+        self.train_summary_ival = get_def(train_summary_ival, 1000)
+        self.validation_ival = get_def(validation_ival, 10000)
+
         self.model = model
         self._build()
 
@@ -39,22 +68,20 @@ class OMTFRunner:
                     DATASET_TYPES.VALID, self.pt_bins, 
                     batch_size=self.model_hparams.batch_size)
             t_init, t_next = self.pipe_train.get_initializer_and_op()
- 
-        self.train_summary_ival = 100
-        self.validation_ival = 10000
 
         with tf.Session() as sess:
             if not self.model.restore(sess):
                 tf.global_variables_initializer().run()
 
             batch_n = 0
-            self.timer_start()
+            should_stop = False
+            self.timer_start(time_limit=time_limit)
             try:
                 for epoch_n in range(epochs):
                     try:
                         t_init.run()
                         print("Epoch %d started!" % epoch_n)
-                        while True:
+                        while not should_stop:
                             batch_n += 1
                             xs, ys = sess.run(t_next)
                             feed = {self.x_ph: xs, 
@@ -78,6 +105,8 @@ class OMTFRunner:
                                 v_loss, v_acc, v_summ = self._validate(sess)
                                 self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
 
+                            should_stop = self.timer_should_stop()
+
                     except tf.errors.OutOfRangeError:
                         print("Epoch %d - finished!" % epoch_n)
                         v_loss, v_acc, v_summ = self._validate(sess)
@@ -87,11 +116,19 @@ class OMTFRunner:
                         if not no_checkpoints:
                             self.model.save_model(sess)
 
+                    self.timer_tick()
+                    print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
+                    if should_stop:
+                        print("Time limit reached!")
+                        break
+
             except KeyboardInterrupt:
                 print("Training stopped by user!")
 
             if not no_checkpoints:
                 self.model.save_model(sess)
+            self.timer_tick()
+            print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
 
 
     def print_log(self, phase, epoch, n, loss, acc):

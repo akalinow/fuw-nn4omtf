@@ -113,7 +113,6 @@ class OMTFDataset:
                     HIST_SCOPES.TOTAL: np.zeros(self.bins.shape[0] - 1), 
                     HIST_SCOPES.CODE: []}
             self.histograms[dtype] = hists
-        print(transform)
         self.transform = transform
  
 

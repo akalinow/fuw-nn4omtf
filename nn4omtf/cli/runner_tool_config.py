@@ -52,7 +52,9 @@ parser_config = {
             ('epochs', {'type': int, 'metavar': 'N', 'default': 1, 'help': 'Set training duration'}),
             ('no_checkpoints', {'action': 'store_true', 'help': 'Don`t make checkpoints'}),
             ('time_limit', {'metavar': 'H+:MM:SS', 'help': 'Training time limit'}),
-            ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'})
+            ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'}),
+            ('validation_ival', {'type': int, 'help': 'Number of batches processed between validation'}),
+            ('train_summary_ival', {'type': int, 'help': 'Number of batches processed between summary collection'})
         ],
         'pos': [
             ('model_dir', {'help': "Directory of model to be trained"}),
