@@ -6,6 +6,8 @@
     Network model manager
 """
 
+import datetime
+import numpy as np
 import tensorflow as tf
 import os
 from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
@@ -13,6 +15,7 @@ from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
         dict_to_json_string
 from nn4omtf.model_config import model_data_default, model_hparams_keys,\
         model_config_keys, model_config_keys_datasets 
+from nn4omtf.const_model import MODEL_RESULTS
 
 class OMTFModel:
     """
@@ -193,6 +196,19 @@ class OMTFModel:
     def save_model(self, sess):
         self.saver.save(sess, self.paths.checkpoint_prefix)
         print("Model saved!")
+
+
+    def save_test_results(self, results, suffix='', note=''):
+        path = self.paths.dir_testouts
+        name = '{:%Y-%m-%d-%H-%M-%S}'.format(datetime.datetime.now()) 
+        if suffix is not '':
+            name = name + '-' + suffix
+        path = os.path.join(path, name)
+        data = {
+            MODEL_RESULTS.NOTE: note,
+            MODEL_RESULTS.RESULTS: results
+        }
+        np.savez_compressed(path, **data)
 
 
     def _update_model_data_with_opts(self, **opts):

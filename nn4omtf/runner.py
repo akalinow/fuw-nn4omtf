@@ -7,6 +7,7 @@
 """
 
 import tensorflow as tf
+import numpy as np
 import time
 from nn4omtf import OMTFInputPipe
 from nn4omtf.utils import dict_to_object, to_sec
@@ -15,6 +16,11 @@ from nn4omtf.const_dataset import DATASET_TYPES
 class OMTFRunner:
 
     LOG_TEMPLATE = '{:^7s}, epoch: {:4d} batch: {:4d} loss: {:.4f} acc: {:.4f}'
+
+
+    def print_log(self, phase, epoch, n, loss, acc):
+        print(OMTFRunner.LOG_TEMPLATE.format(phase, epoch, n, loss, acc))
+
 
     def timer_start(self, time_limit=None):
         self.time_start = time.time()
@@ -49,7 +55,12 @@ class OMTFRunner:
         Run model training.
         Args:
             model: OMTFModel instance
-
+            no_checkpoints: do not do checkpoints
+            time_limit: set training time limit, string format is  `H+:MM:SS`
+            epochs: epochs to process, if `None` train infinitely
+            train_summary_ival: get train summary batches interval
+            validation_ival: batches interval between validations, if `None` 
+                validation is run only at the end of epoch
         """
         get_def = lambda x, y: y if x is None else x
         self.train_summary_ival = get_def(train_summary_ival, 1000)
@@ -73,11 +84,13 @@ class OMTFRunner:
             if not self.model.restore(sess):
                 tf.global_variables_initializer().run()
 
+            epoch_n = 0
             batch_n = 0
             should_stop = False
             self.timer_start(time_limit=time_limit)
             try:
-                for epoch_n in range(epochs):
+                while epochs is None or epoch_n < epochs:
+                    epoch_n += 1
                     try:
                         t_init.run()
                         print("Epoch %d started!" % epoch_n)
@@ -131,44 +144,71 @@ class OMTFRunner:
             print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
 
 
-    def print_log(self, phase, epoch, n, loss, acc):
-        print(OMTFRunner.LOG_TEMPLATE.format(phase, epoch, n, loss, acc))
-
-
-    def test(self):
+    def test(self, model, note='', **opts):
         """
         Run model test.
         Pass whole TEST dataset through network and save raw logits.
+        Args:
+            model: OMTFModel instance
+            note: note to store along with results array
         """
+        test_batch_size = 512
+        self.model = model
         self._build()
 
+        assert self.model_config.ds_test is not None, "TEST dataset path cannot be None!"
+
         with tf.name_scope("input_pipes"):
-            pipe_test = OMTFInputPipe(ds_path_test, DATASET_TYPE.TEST, 
-                pt_bins, batch_size=mconf.test_batch_size)
-            t_init, t_next = pipe_test.get_initializer_and_op()
- 
-        result = None
+            self.pipe_test = OMTFInputPipe(self.model_config.ds_test, 
+                    DATASET_TYPES.TEST, self.pt_bins, 
+                    batch_size=test_batch_size)
+            t_init, t_next = self.pipe_test.get_initializer_and_op()
+
+        results = None
 
         with tf.Session() as sess:
+            if not self.model.restore(sess):
+                print("Test aborted! Cannot restore model!")
+                exit(1)
+
             batch_n = 0
             self.timer_start()
-            t_init.run()
             try:
+                t_init.run()
+                self.ops.metrics_init.run()
                 print("Test started!")
                 while True:
+                    batch_n += 1
                     xs, ys = sess.run(t_next)
-                    feed = {x_ph: xs, y_ph: ys, ind_ph: False}
-                    output = sess.run(out_logits, feed_dict=feed)
-                    if result is None:
-                        result = output
+                    feed = {self.x_ph: xs, 
+                        self.y_ph: ys, 
+                        self.training_ind_ph: False}
+                    run_list = [
+                        self.out_logits,
+                        self.ops.metrics_update,
+                    ]
+                    outs, _ = sess.run(run_list, 
+                            feed_dict=feed)
+                    if results is None:
+                        results = outs
                     else:
-                        result = np.concatenate((result, output), axis=0)
-
-            except tf.errors.OutOfRangeError:
-                print("Test finished!")
+                        results = np.concatenate((results, outs), axis=0)
 
             except KeyboardInterrupt:
-                print("Test stopped by user!")
+                print("Test phase stopped by user!")
+                exit(0)
+
+            except tf.errors.OutOfRangeError:
+                pass
+            self.timer_tick()
+            run_list = [
+                self.ops.loss_cum,
+                self.ops.acc_cum]
+            loss, acc = sess.run(run_list)
+            print("Test finished!")
+            print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
+            self.print_log("TEST", 1, batch_n, loss, acc)
+            self.model.save_test_results(results, note)
 
 
     def _validate(self, sess):

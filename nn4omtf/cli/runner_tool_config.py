@@ -64,7 +64,9 @@ parser_config = {
     ACTION.TEST: {
         'help': "Run test and save results",
         'opts': model_config_opts + model_hparams_opts + [
-            ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'})
+            ('update_config', {'action': 'store_true', 'help': 'Update model config with provided options'}),
+            ('note', {'help': 'Note to store along with results', 'default': ''}),
+            ('suffix', {'help': 'Suffix to append to results file name', 'default': ''})
         ],
         'pos': [
             ('model_dir', {'help': "Directory of model to be tested"}),
@@ -73,7 +75,8 @@ parser_config = {
 
     ACTION.SHOW: {
         'help': "Preview model data",
-        'opts': [],
+        'opts': [
+        ],
         'pos': [
             ('model_dir', {'help': "Directory of model to be shown"}),
         ]

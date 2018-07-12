@@ -46,7 +46,6 @@ class OMTFRunnerTool:
         model = OMTFModel.create_new_model_with_builder_file(
                 model_directory=path,
                 **vars(opts))
-        print("\nCreated!\n")
         print(str(model))
  
 
@@ -54,10 +53,8 @@ class OMTFRunnerTool:
         model = OMTFModel(opts.model_dir, **vars(opts))
         if opts.update_config:
             model.update_config()
-        print("\nLoaded!\n")
         print(str(model))
         runner = OMTFRunner()
-        print(opts)
         runner.train(model, **vars(opts))
 
 
@@ -65,7 +62,6 @@ class OMTFRunnerTool:
         model = OMTFModel(opts.model_dir, **vars(opts))
         if opts.update_config:
             model.update_config()
-        print("\nLoaded!\n")
         print(str(model))
         runner = OMTFRunner()
         runner.test(model, **vars(opts))
