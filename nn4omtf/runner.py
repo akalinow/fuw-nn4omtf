@@ -268,10 +268,11 @@ wrong dimension!")
                 print("out_logits.shape: ", self.out_logits.shape)
                 print("Expected number of classes: ", 2 * len(self.pt_bins) + 1)
                 exit(1)
-            self._build_trainer()
+
+        self._build_trainer(device)
 
 
-    def _build_trainer(self):
+    def _build_trainer(self, device):
         """
         Create trainer and metrics part.
         """
@@ -280,24 +281,34 @@ wrong dimension!")
         # validation/test summaries
         v_summaries = [] 
 
-        # acc/loss - per batch 
-        pred = tf.argmax(self.out_logits, axis=1, output_type=tf.int32)
-        acc = tf.reduce_mean(tf.cast(tf.equal(pred, self.y_ph), tf.float32))
+        with tf.device(device):
+            # acc/loss - per batch 
+            pred = tf.argmax(self.out_logits, axis=1, output_type=tf.int32)
+            acc = tf.reduce_mean(tf.cast(tf.equal(pred, self.y_ph), tf.float32))
 
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=self.y_ph, logits=self.out_logits) 
-        loss = tf.reduce_mean(loss)
+            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=self.y_ph, logits=self.out_logits) 
+            loss = tf.reduce_mean(loss)
+
+            # VALIDATION OPS - cumulative across dataset
+            # We can take mean of means over batches beacuse 
+            # all batches has same size.
+            acc_cum, acc_cum_update = tf.metrics.mean(values=acc,
+                    name="valid/metrics/acc")
+            loss_cum, loss_cum_update = tf.metrics.mean(values=loss,
+                    name="valid/metrics/loss")
+
+        # Get nodes from UPDATE_OPS scope and update them on each train step
+        # Required for batch norm working properly (see TF batch norm docs)
+        _update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(_update_ops):
+            train_step = tf.train.RMSPropOptimizer(
+                learning_rate=self.model_hparams.lrate, 
+                momentum=0.9).minimize(loss)
+
         # Add acc/loss summaries to setup TB training monitor
         t_summaries += [tf.summary.scalar("train/acc", acc)]
         t_summaries += [tf.summary.scalar("train/loss", loss)]
-       
-        # VALIDATION OPS - cumulative across dataset
-        # We can take mean of means over batches beacuse 
-        # all batches has same size.
-        acc_cum, acc_cum_update = tf.metrics.mean(values=acc,
-                name="valid/metrics/acc")
-        loss_cum, loss_cum_update = tf.metrics.mean(values=loss,
-                name="valid/metrics/loss")
         v_summaries += [tf.summary.scalar("valid/loss", loss_cum)]
         v_summaries += [tf.summary.scalar("valid/acc", acc_cum)]
 
@@ -307,18 +318,10 @@ wrong dimension!")
                  scope="valid/metrics"):
             metrics_vars.append(el)
         metrics_init = tf.variables_initializer(var_list=metrics_vars)
-        update = [acc_cum_update, loss_cum_update]
 
+        update = [acc_cum_update, loss_cum_update]
         t_summaries = tf.summary.merge(t_summaries)
         v_summaries = tf.summary.merge(v_summaries)
-
-        # Get nodes from UPDATE_OPS scope and update them on each train step
-        # Required for batch norm working properly (see TF batch norm docs)
-        _update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(_update_ops):
-            train_step = tf.train.RMSPropOptimizer(
-                learning_rate=self.model_hparams.lrate, 
-                momentum=0.9).minimize(loss)
 
         self.ops = dict_to_object({
             'step': train_step,
