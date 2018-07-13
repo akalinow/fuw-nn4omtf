@@ -1,14 +1,15 @@
 
-install-cpu:
+tf-cpu:
 	pip install tensorflow
-	pip install -e .
 
-install-gpu:
+tf-gpu:
 	pip install tensorflow-gpu
+
+nn4omtf:
 	pip install -e . 
 
 clean:
 	find . -name "__pycache__" -delete
 	rm -r *-egg-info
 
-.PHONY: clean install-cpu install-gpu
+.PHONY: clean tf-cpu tf-gpu nn4omtf
