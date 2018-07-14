@@ -6,7 +6,7 @@ tf-gpu:
 	pip install tensorflow-gpu
 
 nn4omtf:
-	pip install -e . 
+	pip3 install -e . 
 
 clean:
 	find . -name "__pycache__" -delete
