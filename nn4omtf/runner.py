@@ -63,8 +63,8 @@ class OMTFRunner:
                 validation is run only at the end of epoch
         """
         get_def = lambda x, y: y if x is None else x
-        self.train_summary_ival = get_def(train_summary_ival, 1000)
-        self.validation_ival = get_def(validation_ival, 10000)
+        self.train_summary_ival = get_def(train_summary_ival, 5000)
+        self.validation_ival = get_def(validation_ival, None)
 
         self.model = model
         self._build()
@@ -114,8 +114,10 @@ class OMTFRunner:
                             else:
                                 sess.run(self.ops.step, feed_dict=feed)
 
-                            if batch_n % self.validation_ival == 0:
+                            if self.validation_ival is not None and \
+                                    batch_n % self.validation_ival == 0:
                                 v_loss, v_acc, v_summ = self._validate(sess)
+                                self.model.tb_add_summary(batch_n, v_summ, valid=True)
                                 self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
 
                             should_stop = self.timer_should_stop()
@@ -123,7 +125,7 @@ class OMTFRunner:
                     except tf.errors.OutOfRangeError:
                         print("Epoch %d - finished!" % epoch_n)
                         v_loss, v_acc, v_summ = self._validate(sess)
-                        self.model.tb_add_summary(batch_n, v_summ)
+                        self.model.tb_add_summary(batch_n, v_summ, valid=True)
                         self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
 
                         if not no_checkpoints:

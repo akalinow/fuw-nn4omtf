@@ -49,7 +49,9 @@ class OMTFModel:
 
         'file_model', 
         'file_builder',
-        'checkpoint_prefix'
+        'checkpoint_prefix',
+        'tblogs_train',
+        'tblogs_valid'
     ]
 
     _model_paths_values = [
@@ -61,7 +63,9 @@ class OMTFModel:
         
         'model.json',
         'builder.py',
-        'checkpoints/ckpt'
+        'checkpoints/ckpt',
+        'tb_logs/train',
+        'tb_logs/valid'
     ]
 
 
@@ -78,6 +82,10 @@ class OMTFModel:
         # Load actual model data
         self.model_data = json_to_dict(self.paths.file_model)
         self._update_model_data_with_opts(**opts)
+
+        self.tb_train_writer = tf.summary.FileWriter(self.paths.tblogs_train)
+        self.tb_valid_writer = tf.summary.FileWriter(self.paths.tblogs_valid)
+
 
 
     def update_config(self):
@@ -189,12 +197,16 @@ class OMTFModel:
         return False
 
 
-    def tb_add_summary(self, n, summ):
-        pass
+    def tb_add_summary(self, n, summ, valid=False):
+        if valid:
+            self.tb_valid_writer.add_summary(summ, n)
+        else:
+            self.tb_train_writer.add_summary(summ, n)
 
 
     def save_model(self, sess):
-        self.saver.save(sess, self.paths.checkpoint_prefix)
+        self.saver.save(sess=sess, save_path=self.paths.checkpoint_prefix,
+            write_meta_graph=False)
         print("Model saved!")
 
 
@@ -260,5 +272,8 @@ class OMTFModel:
         dirs = [v for (k, v) in vars(paths).items() if k.startswith('dir')]
         for d in dirs:
             os.makedirs(d, exist_ok=True)
+            # Create epmty file to push & pull `empty` directories with git
+            with open(os.path.join(d, '.empty'), 'w') as f:
+                f.write('empty file')
 
 
