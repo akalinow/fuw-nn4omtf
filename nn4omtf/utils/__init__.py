@@ -4,4 +4,4 @@ from nn4omtf.utils.py_utils import import_module_from_path,\
 from nn4omtf.utils.utils import to_sec, dict_to_json, dict_to_json_string, \
     json_to_dict
 
-from nn4omtf.utils.net_utils import mk_fc_layer
+from nn4omtf.utils.net_utils import mk_fc_layer, weights
