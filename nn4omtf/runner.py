@@ -88,6 +88,7 @@ class OMTFRunner:
             batch_n = 0
             should_stop = False
             self.timer_start(time_limit=time_limit)
+            self.model.open_train_logs()
             try:
                 while epochs is None or epoch_n < epochs:
                     epoch_n += 1
@@ -111,6 +112,7 @@ class OMTFRunner:
                                         feed_dict=feed)
                                 self.print_log('TRAIN', epoch_n, batch_n, b_loss, b_acc)
                                 self.model.tb_add_summary(batch_n, b_summ)
+                                self.model.add_train_log(epoch_n, batch_n, b_loss, b_acc)
                             else:
                                 sess.run(self.ops.step, feed_dict=feed)
 
@@ -118,6 +120,7 @@ class OMTFRunner:
                                     batch_n % self.validation_ival == 0:
                                 v_loss, v_acc, v_summ = self._validate(sess)
                                 self.model.tb_add_summary(batch_n, v_summ, valid=True)
+                                self.model.add_train_log(epoch_n, batch_n, v_loss, v_acc, valid=True)
                                 self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
 
                             should_stop = self.timer_should_stop()
@@ -126,8 +129,9 @@ class OMTFRunner:
                         print("Epoch %d - finished!" % epoch_n)
                         v_loss, v_acc, v_summ = self._validate(sess)
                         self.model.tb_add_summary(batch_n, v_summ, valid=True)
+                        self.model.add_train_log(epoch_n, batch_n, v_loss, v_acc, valid=True)
                         self.print_log('VALID', epoch_n, batch_n, v_loss, v_acc)
-
+                        self.model.save_train_logs()
                         if not no_checkpoints:
                             self.model.save_model(sess)
 
@@ -139,6 +143,8 @@ class OMTFRunner:
 
             except KeyboardInterrupt:
                 print("Training stopped by user!")
+
+            self.model.save_train_logs()
 
             if not no_checkpoints:
                 self.model.save_model(sess)

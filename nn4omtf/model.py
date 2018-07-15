@@ -7,6 +7,7 @@
 """
 
 import datetime
+import time
 import numpy as np
 import tensorflow as tf
 import os
@@ -50,8 +51,6 @@ class OMTFModel:
         'file_model', 
         'file_builder',
         'checkpoint_prefix',
-        'tblogs_train',
-        'tblogs_valid'
     ]
 
     _model_paths_values = [
@@ -64,8 +63,6 @@ class OMTFModel:
         'model.json',
         'builder.py',
         'checkpoints/ckpt',
-        'tb_logs/train',
-        'tb_logs/valid'
     ]
 
 
@@ -79,19 +76,42 @@ class OMTFModel:
         self.root_dir = model_directory
         self.paths = OMTFModel._get_paths(model_directory)
 
-        # Load actual model data
-        self.model_data = json_to_dict(self.paths.file_model)
+        self._load_model_data()
         self._update_model_data_with_opts(**opts)
 
-        self.tb_train_writer = tf.summary.FileWriter(self.paths.tblogs_train)
-        self.tb_valid_writer = tf.summary.FileWriter(self.paths.tblogs_valid)
 
+    def open_train_logs(self):
+        stamp = '{:%Y-%m-%d-%H-%M-%S}'.format(datetime.datetime.now()) 
+        tb_logs_path = os.path.join(self.paths.dir_tblogs, stamp)
+        self.tb_writer = tf.summary.FileWriter(tb_logs_path)
+        self.train_logs = {
+            'stamp': stamp,
+            'time_start': time.time(),
+            'train': [],
+            'valid': []
+        }
+
+
+    def save_train_logs(self):
+        stamp = self.train_logs['stamp']
+        path = os.path.join(self.paths.dir_logs, stamp)
+        dict_to_json(path, self.train_logs)
+        
+
+    def add_train_log(self, epoch, batch, loss, acc, valid=False):
+        name = 'valid' if valid else 'train'
+        self.train_logs[name].append([time.time(), epoch, batch, float(loss), float(acc)])
 
 
     def update_config(self):
         """
         Save actual model data in model config file.
         """
+        # Convert absolute paths to relative
+        paths = [(k, self.model_data['config'][k]) for k in model_config_keys_datasets]
+        for k, abs_path in paths:
+            rel_path = os.path.relpath(abs_path, start=self.paths.dir_root)
+            self.model_data['config'][k] = rel_path
         dict_to_json(self.paths.file_model, self.model_data)
 
 
@@ -198,10 +218,7 @@ class OMTFModel:
 
 
     def tb_add_summary(self, n, summ, valid=False):
-        if valid:
-            self.tb_valid_writer.add_summary(summ, n)
-        else:
-            self.tb_train_writer.add_summary(summ, n)
+        self.tb_writer.add_summary(summ, n)
 
 
     def save_model(self, sess):
@@ -276,4 +293,14 @@ class OMTFModel:
             with open(os.path.join(d, '.empty'), 'w') as f:
                 f.write('empty file')
 
+
+    def _load_model_data(self):
+        # Convert relative paths to absolute
+        self.model_data = json_to_dict(self.paths.file_model)
+        paths = [(k, self.model_data['config'][k]) for k in model_config_keys_datasets]
+        print(paths)
+        for k, rel_path in paths:
+            if rel_path is not None:
+                abs_path = os.path.normpath(os.path.join(self.paths.dir_root, rel_path))
+                self.model_data['config'][k] = abs_path
 
