@@ -12,6 +12,10 @@ import os
 import inspect
 
 
+def obj_elems(x):
+    return [e for e, _ in vars(x).items() if not e.startswith('_')]
+
+
 def import_module_from_path(path):
     """Import python code from path."""
     name = os.path.basename(path).split(".")[0]

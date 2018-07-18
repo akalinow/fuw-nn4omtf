@@ -9,6 +9,7 @@
 import numpy as np
 import os
 
+from nn4omtf.const_files import FILE_TYPES
 from nn4omtf.const_dataset import DATASET_TYPES, HIST_TYPES, DATA_TYPES,\
     HIST_SCOPES, ORD_TYPES, NPZ_DATASET, DATASET_FIELDS, DSET_STAT_FIELDS
 
@@ -81,7 +82,7 @@ class OMTFDataset:
     """
     
     def __init__(self, files, train_n, valid_n, test_n, treshold=5400., 
-            transform=(0, 600), hist_bins=(0, 5400, 50)):
+            transform=(0, 600), hist_bins=(-800, 5400, 80)):
         """
         Args:
             files: list of paths to files created by ROOT-TO-NUMPY converter
@@ -128,10 +129,14 @@ class OMTFDataset:
         files_n = len(self.files)
         M = files_n + 1
         null_frac = 1. / M
+        print("Files N: %d" % files_n)
+        print("Divisions: %d" % M)
+        print("Events fraction per division: %f" % null_frac)
         
         g_tot = 0
         n_tot = 0
         partition = []
+        print("Dataset partition:")
         for N, name in zip(self.phase_n, self.names):
             events_per_file = int(N / files_n)
             nulls_per_file = int(events_per_file * null_frac)
@@ -139,10 +144,16 @@ class OMTFDataset:
                 print("WARNING! Zero events will be taken as NULL examples \
                         in %s phase!" % name)
             good_per_file = events_per_file - nulls_per_file
+            print("name: {}, events N: {}".format(name, N))
+            print("events per file: %d" % events_per_file)
+            print("null events per file: %d" % nulls_per_file)
+            print("good events per file: %d" % good_per_file)
             partition.append((g_tot, g_tot + good_per_file, 
                 n_tot, n_tot + nulls_per_file))
             n_tot += nulls_per_file
             g_tot += good_per_file
+        print("Events taken from single file:")
+        print("total: {}, good: {}, null: {}".format(g_tot+n_tot, g_tot, n_tot))
         return partition
     
 
@@ -303,7 +314,6 @@ class OMTFDataset:
             DATASET_FIELDS.OMTF_SIGN,
             DATASET_FIELDS.OMTF_QUALITY]
 
-
         for k, v in self.dataset.items():
             fields = [
                 v[0],
@@ -333,7 +343,7 @@ class OMTFDataset:
         stats[DSET_STAT_FIELDS.TRAIN_EXAMPLES_ORDERING] = self.train_examples_order
 
         orig = self.histograms[DATA_TYPES.ORIG]
-        trans = self.histograms[DATA_TYPES.ORIG]
+        trans = self.histograms[DATA_TYPES.TRANS]
 
         stats[DSET_STAT_FIELDS.HISTS_TOTAL_ORIG] = {
             HIST_TYPES.VALS: orig[HIST_TYPES.VALS][HIST_SCOPES.TOTAL],
@@ -353,8 +363,10 @@ class OMTFDataset:
 
         stats[DSET_STAT_FIELDS.HISTS_BINS] = self.bins
         stats[DSET_STAT_FIELDS.MUON_SIGNATURES] = self.signatures
+        stats[DSET_STAT_FIELDS.TRANSFORM] = self.transform
+        stats[DSET_STAT_FIELDS.TRESHOLD] = self.treshold
 
-        data = {DSET_STAT_FIELDS.GROUP_NAME: stats}
+        data = {FILE_TYPES.DATASET_STATISTICS: stats}
         np.savez_compressed(path, **data)
 
 
