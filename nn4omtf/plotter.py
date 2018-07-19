@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 class OMTFPlotter:
     
-    def __init__(self, file_path, outdir='.', **kw):
+    def __init__(self, file_path, outdir=None, **kw):
         """
         Create file plotter and override its default settings, if needed.
         Args:
@@ -62,12 +62,14 @@ class OMTFPlotter:
         return plottable
     
 
-    def set_outdir(self, outdir='.'):
+    def set_outdir(self, outdir=None):
         """
         Set root output directory.
         Args:
             outdir: output directory, current cwd is default
         """
+        if outdir is None:
+            outdir = '.'
         self.outdir = outdir
 
 
