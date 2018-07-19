@@ -9,38 +9,29 @@
 
 import os
 from nn4omtf import OMTFModel, OMTFRunner
-from nn4omtf.cli.runner_tool_config import ACTION, parser_config
-from nn4omtf.cli.utils import create_parser
+from .runner_tool_config import ACTION, parser_config
+from .tool import OMTFTool
 
 
-class OMTFRunnerTool:
+class OMTFRunnerTool(OMTFTool):
+
 
     def __init__(self):
-        self.parser = create_parser(parser_config, desc="OMTF NN trainer")
-
-
-    def run(self):
-        FLAGS = self.parser.parse_args()
-        action = FLAGS.action
-
-        if action == ACTION.SHOW:
-            self._show(FLAGS)
-        elif action == ACTION.MODEL:
-            self._create(FLAGS)
-        elif action == ACTION.TRAIN:
-            self._train(FLAGS)
-        elif action == ACTION.TEST:
-            self._test(FLAGS)
-        else:
-            self.parser.print_help()
+        handlers = [
+            (ACTION.SHOW, OMTFRunnerTool._show),
+            (ACTION.MODEL, OMTFRunnerTool._create),
+            (ACTION.TRAIN, OMTFRunnerTool._train),
+            (ACTION.TEST, OMTFRunnerTool._test)
+        ]
+        super().__init__(parser_config, "OMTF NN trainer", handlers)
     
 
-    def _show(self, opts):
+    def _show(opts):
         model = OMTFModel(opts.model_dir)
         print(str(model))
 
     
-    def _create(self, opts):
+    def _create(opts):
         path = '.' if opts.outdir is None else opts.outdir
         path = os.path.join(path, opts.name)
         model = OMTFModel.create_new_model_with_builder_file(
@@ -49,7 +40,7 @@ class OMTFRunnerTool:
         print(str(model))
  
 
-    def _train(self, opts):
+    def _train(opts):
         model = OMTFModel(opts.model_dir, **vars(opts))
         if opts.update_config:
             model.update_config()
@@ -58,7 +49,7 @@ class OMTFRunnerTool:
         runner.train(model, **vars(opts))
 
 
-    def _test(self, opts):
+    def _test(opts):
         model = OMTFModel(opts.model_dir, **vars(opts))
         if opts.update_config:
             model.update_config()

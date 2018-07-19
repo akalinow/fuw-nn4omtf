@@ -6,16 +6,31 @@
     Unified OMTF data plotter.
 """
 
-from nn4omtf.cli.plotter_tool_config import ACTION, parser_config
-from nn4omtf.cli.utils import create_parser
+import os
+from .tool import OMTFTool
+from .plotter_tool_config import ACTION, parser_config
+from .utils import create_parser
 
 
-class OMTFPlotterTool:
+class OMTFPlotterTool(OMTFTool):
 
     def __init__(self):
-        self.parser = create_parser(parser_config, desc="OMTF data plotter")
+        handlers = [
+            (ACTION.SHOW, OMTFPlotterTool._show),
+            (ACTION.DEFAULT_CONF, OMTFPlotterTool._default_conf),
+            (ACTION.PLOT, OMTFPlotterTool._plot),
+        ]
+        super().__init__(parser_config, "OMTF data plotter", handlers)
 
-    def run(self):
+
+    def _show(opts):
         pass
 
+
+    def _default_conf(opts):
+        pass
+
+
+    def _plot(opts):
+        pass
 

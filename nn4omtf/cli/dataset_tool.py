@@ -8,31 +8,25 @@
 
 import nn4omtf
 import os
-from nn4omtf.dataset import OMTFDataset
-from nn4omtf.cli.dataset_tool_config import ACTION, parser_config
-from nn4omtf.cli.utils import create_parser
+from nn4omtf import OMTFDataset
+from .tool import OMTFTool
+from .dataset_tool_config import ACTION, parser_config
+from .utils import create_parser
 
-class OMTFDatasetTool:
+
+class OMTFDatasetTool(OMTFTool):
+
 
     def __init__(self):
-        self.parser = create_parser(parser_config, desc="OMTF dataset tool")
+        handlers = [
+            (ACTION.SHOW, OMTFDatasetTool._show),
+            (ACTION.CREATE, OMTFDatasetTool._create),
+            (ACTION.CONVERT, OMTFDatasetTool._convert),
+        ]
+        super().__init__(parser_config, "OMTF dataset tool", handlers)
 
 
-    def run(self):
-        FLAGS = self.parser.parse_args()
-        action = FLAGS.action
-
-        if action == ACTION.SHOW:
-            self._show(FLAGS)
-        elif action == ACTION.CREATE:
-            self._create(FLAGS)
-        elif action == ACTION.CONVERT:
-            self._convert(FLAGS)
-        else:
-            self.parser.print_help()
-
-
-    def _create(self, FLAGS):
+    def _create(FLAGS):
         path = '.'
         if FLAGS.outdir is not None:
             path = FLAGS.outdir
@@ -50,11 +44,12 @@ class OMTFDatasetTool:
         ds.save_dataset(ds_path)
         ds.save_stats(ds_stat)
 
-    def _show(self, FLAGS):
+
+    def _show(FLAGS):
         OMTFDataset.show(FLAGS.file)
 
 
-    def _convert(self, FLAGS):
+    def _convert(FLAGS):
         """
         Convert list of ROOT dataset files into Numpy dataset.
         """
