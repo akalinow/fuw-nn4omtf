@@ -118,10 +118,12 @@ class OMTFInputPipe:
                 datasets = [tf.data.Dataset.from_tensor_slices(kw[k]) 
                         for k in self.data_labels]
                 dataset = tf.data.Dataset.zip(tuple(datasets))
-                dataset = dataset.map(map_func=map_fn) 
+                # Batch elements before map to hide function call overhead
+                dataset = dataset.batch(10000)
+                dataset = dataset.map(map_func=map_fn, num_parallel_calls=None)
+                dataset = dataset.apply(tf.contrib.data.unbatch())
+                dataset = dataset.prefetch(buffer_size=4*self.batch_size)
                 dataset = dataset.batch(self.batch_size)
-
-
                 iterator = dataset.make_initializable_iterator()
         return iterator
 
