@@ -30,7 +30,8 @@ class OMTFTool:
         action = FLAGS.action
         try:
             handler = self.actions[action]
-            handler(FLAGS)
         except:
             self.parser.print_help()
+            exit(0)
+        handler(FLAGS)
 
