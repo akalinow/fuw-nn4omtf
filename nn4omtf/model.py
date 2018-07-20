@@ -85,6 +85,7 @@ class OMTFModel:
         tb_logs_path = os.path.join(self.paths.dir_tblogs, stamp)
         self.tb_writer = tf.summary.FileWriter(tb_logs_path)
         self.train_logs = {
+            'hparams': self.model_data['hparams'],
             'stamp': stamp,
             'time_start': time.time(),
             'train': [],
