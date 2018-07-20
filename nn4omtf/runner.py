@@ -151,6 +151,9 @@ class OMTFRunner:
             self.timer_tick()
             print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
 
+        self.pipe_train.close()
+        self.pipe_valid.close()
+
 
     def test(self, model, note='', **opts):
         """
@@ -217,6 +220,7 @@ class OMTFRunner:
             print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
             self.print_log("TEST", 1, batch_n, loss, acc)
             self.model.save_test_results(results, note)
+        self.pipe_test.close()
 
 
     def _validate(self, sess):

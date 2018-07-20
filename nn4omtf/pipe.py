@@ -47,6 +47,10 @@ class OMTFInputPipe:
     In case of TEST dataset, all additional data will be read by
     statistics and plotter module.
     There's no need to use those data where.
+
+    # Cleanup
+    Call `close` at the end. This closes numpy file descriptonr.
+
     """
 
     def __init__(self, npz_path, dataset_type, pt_bins, batch_size=1,
@@ -82,6 +86,10 @@ class OMTFInputPipe:
         self.initializer = self.iterator.initializer
         self.next_op = self.iterator.get_next()
         self.session = None
+
+
+    def close(self):
+        self.dataset.close()
 
 
     def build_pipe(self, dataset_type, **kw):
@@ -175,6 +183,7 @@ if __name__ == '__main__':
         for _ in range(FLAGS.examples):
             data = pipe.fetch()
             print(data)
-
+    
+    pipe.close()
     
 
