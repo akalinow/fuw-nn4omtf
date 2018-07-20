@@ -55,5 +55,6 @@ class OMTFRunnerTool(OMTFTool):
             model.update_config()
         print(str(model))
         runner = OMTFRunner()
+        print(vars(opts))
         runner.test(model, **vars(opts))
 

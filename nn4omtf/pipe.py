@@ -11,6 +11,7 @@ import numpy as np
 import multiprocessing
 from nn4omtf.const_dataset import DATASET_TYPES, DATASET_FIELDS
 
+
 class OMTFInputPipe:
     """
     Input pipe is an abstraction over `*.npz` datasets
@@ -80,7 +81,8 @@ class OMTFInputPipe:
             DATASET_FIELDS.IS_NULL]
 
         print('Loading `%s` data from `%s`...' % (dataset_type, npz_path))
-        self.dataset = np.load(npz_path)[dataset_type].item()
+        self.dataset_file = np.load(npz_path)
+        self.dataset = self.dataset_file[dataset_type].item()
 
         self.iterator = self.build_pipe(dataset_type, **self.dataset)
         self.initializer = self.iterator.initializer
@@ -89,7 +91,7 @@ class OMTFInputPipe:
 
 
     def close(self):
-        self.dataset.close()
+        self.dataset_file.close()
 
 
     def build_pipe(self, dataset_type, **kw):

@@ -155,7 +155,7 @@ class OMTFRunner:
         self.pipe_valid.close()
 
 
-    def test(self, model, note='', **opts):
+    def test(self, model, note='', suffix=None, **opts):
         """
         Run model test.
         Pass whole TEST dataset through network and save raw logits.
@@ -219,7 +219,8 @@ class OMTFRunner:
             print("Test finished!")
             print("Mean sec. per batch: %f" % (self.time_elapsed / batch_n))
             self.print_log("TEST", 1, batch_n, loss, acc)
-            self.model.save_test_results(results, note)
+            self.model.save_test_results(results, suffix=suffix,
+                    note=note)
         self.pipe_test.close()
 
 

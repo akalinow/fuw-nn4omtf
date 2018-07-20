@@ -78,6 +78,7 @@ class OMTFModel:
 
         self._load_model_data()
         self._update_model_data_with_opts(**opts)
+        self.pt_bins = OMTFModel.test_graph_builder(self.get_builder_func())
 
 
     def open_train_logs(self):
@@ -144,6 +145,35 @@ class OMTFModel:
         return model
 
 
+    def test_graph_builder(builder_func):
+        """
+        Test model network builder by calling it within 
+        new temporary graph.
+        Rises exception when:
+          - returned logits shape does not match with size of pt bins list,
+          - first bin list's element is not zero
+
+        Args:
+            builder_func: builder function
+
+        Returns:
+            pt bins list
+        """
+        with tf.Graph().as_default() as g:
+            x_ph = tf.placeholder(tf.float32)
+            ind_ph = tf.placeholder(tf.bool)
+            HITS_REDUCED_SHAPE = [18, 2] # TODO create constant
+            logits, pt_bins = builder_func(x_ph, HITS_REDUCED_SHAPE, ind_ph)
+
+            s = "Network output logits returned from builder function"
+            s +="has wrong dimension!\n"
+            s += "out_logits.shape: " + str(logits.shape) + "\n"
+            s += "Expected number of classes: " + str( 2 * len(pt_bins) + 1)
+            assert logits.shape[1] == 2 * len(pt_bins) + 1, s 
+            assert pt_bins[0] == 0, 'First pt bins element is not ZERO!'
+        return pt_bins
+
+
     def create_new_model_with_builder_fn(model_directory, builder_fn, **opts):
         """
         Create model and its directory using builder function.
@@ -158,6 +188,9 @@ class OMTFModel:
             to it in trainer internals.
 
         """
+        # Before creation of model direcory sturcture, test correctness of
+        # model builder
+        OMTFModel.test_graph_builder(builder_fn)
         # Crete directory structure first
         OMTFModel._create_structure(model_directory)
         paths =  OMTFModel._get_paths(model_directory)
@@ -166,13 +199,13 @@ class OMTFModel:
         builder_file = paths.file_builder
         with open(builder_file, 'w') as f:
             f.write(builder_code)
+
         # Save default model data
         dict_to_json(paths.file_model, model_data_default)
 
         # Load default object with some options ...
         model = OMTFModel(
                 model_directory=model_directory,
-                builder_fn=builder_fn,
                 **opts)
         # ... and then save
         model.update_config()
@@ -228,15 +261,16 @@ class OMTFModel:
         print("Model saved!")
 
 
-    def save_test_results(self, results, suffix='', note=''):
+    def save_test_results(self, results, suffix=None, note=''):
         path = self.paths.dir_testouts
         name = '{:%Y-%m-%d-%H-%M-%S}'.format(datetime.datetime.now()) 
-        if suffix is not '':
+        if suffix is not None:
             name = name + '-' + suffix
         path = os.path.join(path, name)
         data = {
             MODEL_RESULTS.NOTE: note,
-            MODEL_RESULTS.RESULTS: results
+            MODEL_RESULTS.RESULTS: results,
+            MODEL_RESULTS.PT_BINS: self.pt_bins,
         }
         np.savez_compressed(path, **data)
 

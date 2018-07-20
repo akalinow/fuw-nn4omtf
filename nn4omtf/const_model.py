@@ -9,4 +9,5 @@
 class MODEL_RESULTS:
     NOTE = 'note'
     RESULTS = 'results'
+    PT_BINS = 'pt_bins'
 
