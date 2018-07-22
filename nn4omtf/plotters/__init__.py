@@ -11,10 +11,12 @@
 from nn4omtf.const_files import FILE_TYPES
 
 from .dataset_stats import dataset_stat_plotter
+from .test_stats import test_stat_plotter
 
 
 PLOTTERS_TABLE = {
-    FILE_TYPES.DATASET_STATISTICS: dataset_stat_plotter
+    FILE_TYPES.DATASET_STATISTICS: dataset_stat_plotter,
+    FILE_TYPES.TEST_STATISTICS: test_stat_plotter
 }
 
 PLOTTER_DEFAULTS = {
