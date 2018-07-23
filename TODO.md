@@ -1,5 +1,6 @@
 # TO DO
 
-- test stat generation 
+- OMTF has own pt bins...
+  - use it to calculate accuracy and curves
 - plotter
-  - test stats
+  - prob distss.
