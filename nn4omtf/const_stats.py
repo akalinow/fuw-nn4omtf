@@ -8,9 +8,6 @@
 
 
 class TEST_STATISTICS_FIELDS:
-    PT_BINS = 'pt_bins'
-    SUMMARY = 'summary'
-    PDIST = 'pdist'
     HISTOGRAMS = 'hists'
     CURVES = 'curves'
-    PT_CODES = 'pt_codes'
+    ACCURACIES = 'accuracies'

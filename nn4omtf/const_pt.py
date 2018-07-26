@@ -4,6 +4,7 @@
     MIT License
 
     Muon PT codes and pt ranges. 
+    OMTF PTs. 
 """
 
 
@@ -45,4 +46,37 @@ PT_CODES_IDX = [c[0] for c in PT_CODES_DATA]
 PT_CODES_RANGE_MIN = [c[1] for c in PT_CODES_DATA]
 PT_CODES_RANGE_MAX = [c[2] for c in PT_CODES_DATA]
 PT_CODES_RANGE_MID = [c[3] for c in PT_CODES_DATA]
+PT_CODES_BINS = PT_CODES_RANGE_MIN[1:]
+PT_CODES_RANGES = list(zip(PT_CODES_RANGE_MIN, PT_CODES_RANGE_MAX))
 
+OMTF_PT_VALS = [
+    -999.0,
+    4.0,
+    4.5,
+    5.0,
+    6.0,
+    7.0,
+    8.0,
+    10.0,
+    12.0,
+    14.0,
+    16.0,
+    18.0,
+    20.0,
+    25.0,
+    30.0,
+    35.0,
+    40.0,
+    45.0,
+    50.0,
+    60.0,
+    70.0,
+    80.0,
+    90.0,
+    100.0,
+    120.0,
+    140.0,
+    200.0
+]
+
+OMTF_BINS = [0] + OMTF_PT_VALS[1:]
