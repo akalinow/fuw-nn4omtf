@@ -37,23 +37,34 @@ def get_desc(key):
 def _plot_curves(content, opts):
     plots = []
     curves = content[TEST_STATISTICS_FIELDS.CURVES]
-    pt_bins = content[TEST_STATISTICS_FIELDS.PT_BINS]
-    pt_codes = content[TEST_STATISTICS_FIELDS.PT_CODES]
-    cls_sz = len(pt_bins) + 1
-    keys = [x[:-2] for x in curves.keys() if x.endswith('nn')]
-    nn_curves = [curves[key + 'nn'] for key in keys]
-    omtf_curves = [curves[key + 'omtf'] for key in keys]
 
-    for key, nnc, omtfc in zip(keys, nn_curves, omtf_curves):
-        desc = get_desc(key)
-        for idx in range(2, cls_sz):
+    to_plot = [
+        ('ptc_nnpt_all', 'ptc_omtfpt_all', 'wszystkie'),
+        ('ptc_nnpt_ptnnq12', 'ptc_omtfpt_ptnnq12', 'OMTF quality = 12, OMTF $p_T$ > 0' ),
+        ('ptc_nnpt_ptnn','ptc_omtfpt_ptnn', 'OMTF $p_T$ > 0'),
+        ('ptc_nnpt_q12', 'ptc_omtfpt_q12', 'OMTF quality = 12')
+    ]
+    for nk, ok, desc in to_plot:
+        n_arr, n_xs, n_ys = curves[nk]
+        o_arr, o_xs, o_ys = curves[ok]
+
+        pt_codes = n_ys[2]
+        N = n_xs[0]
+        nn_ranges = n_xs[1]
+        omtf_ranges = o_xs[1]
+        
+        for idx, (nn_pt_min, nn_pt_max) in zip(range(2, N), nn_ranges[2:]):
             fig, ax = plt.subplots(1,1, figsize=opts.fig_size)
-            pt_val = pt_bins[idx-1]
-            ptc, ptc_min, ptc_max = find_code(pt_val)
-            ax.plot(pt_codes, nnc[idx], 'o-.', label='NN')
-            ax.plot(pt_codes, omtfc[idx], 'o-.', label='OMTF')
-            plt.axvline(x=ptc, c='#ff1111', linestyle='-.', label='kod: %d $p\in[%.1f, %.1f[$ GeV, $p_T$: %.1f GeV' % (ptc, ptc_min, ptc_max, pt_val))
-            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f Gev\nZdarzenia: %s" % (pt_val, desc), 
+            treshold = nn_pt_min 
+            ptc, ptc_min, ptc_max = find_code(treshold)
+            for i, (a, b) in enumerate(omtf_ranges[1:]):
+                if a >= treshold:
+                    o_idx = i + 1
+                    break
+            ax.plot(pt_codes, n_arr[idx], 'o-.', label='NN')
+            ax.plot(pt_codes, o_arr[o_idx], 'o-.', label='OMTF')
+            plt.axvline(x=ptc, c='#ff1111', linestyle='-.', label='kod: %d $p\in[%.1f, %.1f[$ GeV, $p_T$: %.1f GeV' % (ptc, ptc_min, ptc_max, treshold))
+            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f Gev\nZdarzenia: %s" % (treshold, desc), 
                     size=opts.title_size)
             ax.legend(loc=opts.legend_loc,  fontsize=opts.legend_fontsize)
             ax.set_xlabel('Kod pędowy', size=opts.xlabel_size)
@@ -61,8 +72,7 @@ def _plot_curves(content, opts):
             ax.set_ylabel('Efektywność', size=opts.ylabel_size)
             plt.xticks(size=opts.xticks_size)
             fig.tight_layout()
-            plots += [('%s%.1f' % (key, pt_val), fig)]
-
+            plots += [('curve-%s-%.1f' % (nk, treshold), fig)]
     return plots
 
 
@@ -71,5 +81,4 @@ def test_stat_plotter(content, config):
     sns.set_style(opts.sns_style)
     plots = []
     plots += _plot_curves(content, opts)
-#    plots += _plot_pdist(content, opts)
     return plots
