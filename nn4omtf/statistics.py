@@ -16,7 +16,6 @@ from .const_files import FILE_TYPES
 from .const_pt import PT_CODES_BINS, OMTF_BINS, PT_CODES_RANGES
 
 
-
 class OMTFStatistics:
     """
     Generate statistic from TEST run results.
@@ -95,6 +94,7 @@ class OMTFStatistics:
             ('muon_ptc', muon_ptc_arr, muon_ptc_n, muon_ptc_ranges, muon_ptc_labels),
             # Ground Truths for NN and OMTF
             ('muon_nn_cls', muon_nn_cls_arr, nn_cls_n, None, nn_cls_labels),
+            ('muon_nn_cls_wn', muon_nn_cls_wn_arr, nn_cls_n, None, nn_cls_labels),
             ('muon_omtf_cls', muon_omtf_cls_arr, omtf_cls_n, None, omtf_cls_labels),
             # NN and OMTF full outputs 
             ('nn_cls', nn_cls_arr, nn_cls_n, None, nn_cls_labels),
@@ -127,6 +127,7 @@ class OMTFStatistics:
         # == (hist key, xs data key, ys data key, mask key)
         _htg = [
             ('nn_self', 'muon_nn_cls', 'nn_cls'),
+            ('nn_self_wn', 'muon_nn_cls_wn', 'nn_cls'),
             ('omtf_self', 'muon_omtf_cls', 'omtf_cls'),
             ('omtf_as_nn', 'muon_nn_cls', 'omtf_nn_cls'),
             ('ptc_nnpt', 'muon_ptc', 'nn_pt'),
@@ -219,7 +220,7 @@ class OMTFStatistics:
             self.accuracies[kh] = hs.trace() / hs.sum()
 
 
-    def save(self, path):
+    def save(self, path, summary=True):
         """
         Save statistics data as `.npz` file.
         """
@@ -234,4 +235,8 @@ class OMTFStatistics:
             self.accuracies
         ]
         data = {FILE_TYPES.TEST_STATISTICS: dict(zip(l,f))}
-        np.savez_compressed(path, **data)        
+        np.savez_compressed(path, **data) 
+        if summary:
+            dict_to_json(path + '_summary.json', 
+                {TEST_STATISTICS_FIELDS.ACCURACIES: self.accuracies})
+

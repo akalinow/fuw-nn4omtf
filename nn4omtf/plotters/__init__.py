@@ -21,6 +21,7 @@ PLOTTERS_TABLE = {
 
 PLOTTER_DEFAULTS = {
     'sns_style': 'whitegrid',
+    'sns_style_nogrid': 'white',
     'fig_size': (10, 6.2),
     'title_size': 16,
     'legend_loc': 2,
@@ -29,5 +30,6 @@ PLOTTER_DEFAULTS = {
     'ylabel_size': 14,
     'xticks_size': 12,
     'yticks_size': 12,
-    'hist_type': 'step'
+    'hist_type': 'step',
+    'colorbar_fontsize': 12
 }

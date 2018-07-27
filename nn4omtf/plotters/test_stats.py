@@ -15,8 +15,40 @@ from nn4omtf.utils import dict_to_object, obj_elems
 from nn4omtf.const_pt import PT_CODES_DATA
 
 
-def _plot_pdist(content, opts):
-    pass
+def _plot_response(content, opts):
+    plots = []
+    hists = content[TEST_STATISTICS_FIELDS.HISTOGRAMS]
+    sns.set_style(opts.sns_style_nogrid)
+
+    to_plot = [
+        ('nn_self_all', 'warunki rzeczywiste', True),
+        ('nn_self_wn_all', 'warunki treningowe', False)
+    ]
+
+    for k, desc, skip_first in to_plot:
+        hs, xd, yd = hists[k]
+        yn, _, yl = yd
+        xn, _, xl = xd
+        title = "Częstość odpowiedzi sieci\n(Norm. względem kodu rzeczywistego, %s)" % desc
+
+        fig, ax = plt.subplots(1,1, figsize=opts.fig_size)
+        data = hs / hs.sum(axis=1)
+        if skip_first:
+            data = data[:,1:]
+            xn -= 1
+            xl = xl[1:]
+        cax = plt.imshow(data, vmax=1, cmap='hot')
+        plt.title(title, size=opts.title_size)
+        plt.ylabel('Kod klasy - odpowiedź', size=opts.ylabel_size)
+        plt.xlabel('Rzeczywisty kod klasy', size=opts.xlabel_size)
+        plt.xticks(range(xn), xl, size=opts.xticks_size)
+        plt.yticks(range(yn), yl, size=opts.yticks_size)
+        cb = plt.colorbar()
+        cb.set_label('Unormowana częstość odpowiedzi', size=opts.colorbar_fontsize)
+        fig.tight_layout()
+        plots += [('nn-response-%s' % (k), fig)]
+
+    return plots 
 
 
 def find_code(pt):
@@ -24,19 +56,11 @@ def find_code(pt):
     assert len(l) == 1
     return tuple(l[0][:-1])
 
-def get_desc(key):
-    descs = {
-        'curves_not_null_': '$p_T$ class $\\neq$ NULL',
-        'curves_q12_pt999_': 'OMTF quality = 12, OMTF $p_T$ > 0',
-        'curves_pt999_': 'OMTF $p_T$ > 0',
-        'curves_q12_': 'OMTF quality = 12',
-        'curves_all_': 'wszystkie'
-    }
-    return descs[key]
 
 def _plot_curves(content, opts):
     plots = []
     curves = content[TEST_STATISTICS_FIELDS.CURVES]
+    sns.set_style(opts.sns_style)
 
     to_plot = [
         ('ptc_nnpt_all', 'ptc_omtfpt_all', 'wszystkie'),
@@ -78,7 +102,7 @@ def _plot_curves(content, opts):
 
 def test_stat_plotter(content, config):
     opts = dict_to_object(config)
-    sns.set_style(opts.sns_style)
     plots = []
     plots += _plot_curves(content, opts)
+    plots += _plot_response(content, opts)
     return plots
