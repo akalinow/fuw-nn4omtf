@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 setup(
         name='nn4omtf',
-        version='1.1.0dev1',
+        version='1',
         description='Neural Networks tools for OMTF',
         long_description=long_description, # Load form README.rst
         url='https://github.com/jlysiak/fuw-nn4omtf',
@@ -19,7 +19,6 @@ setup(
         keywords='neuralnetworks cms physics muon',
         license='MIT',
         classifiers=[
-            'Development Status :: 2 - Pre-Alpha',
             'Programming Language :: Python :: 3.6'
             'Programming Language :: Python :: 3.5'
             ],
