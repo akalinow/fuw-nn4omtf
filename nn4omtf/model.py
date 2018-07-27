@@ -17,6 +17,7 @@ from nn4omtf.utils import dict_to_object, get_source_of_obj, json_to_dict,\
 from nn4omtf.model_config import model_data_default, model_hparams_keys,\
         model_config_keys, model_config_keys_datasets 
 from nn4omtf.const_model import MODEL_RESULTS
+from nn4omtf import OMTFStatistics
 
 class OMTFModel:
     """
@@ -264,7 +265,7 @@ class OMTFModel:
     def save_test_results(self, results, suffix=None, note=''):
         path = self.paths.dir_testouts
         name = '{:%Y-%m-%d-%H-%M-%S}'.format(datetime.datetime.now()) 
-        if suffix is not None:
+        if suffix is not None and suffix != '':
             name = name + '-' + suffix
         path = os.path.join(path, name)
         data = {
@@ -273,6 +274,8 @@ class OMTFModel:
             MODEL_RESULTS.PT_BINS: self.pt_bins,
         }
         np.savez_compressed(path, **data)
+        with OMTFStatistics(self.get_dataset_paths().ds_test, path + '.npz') as stats:
+            stats.save(path + '-stats')
 
 
     def _update_model_data_with_opts(self, **opts):

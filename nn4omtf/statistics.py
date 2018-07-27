@@ -8,6 +8,7 @@
 
 import numpy as np
 
+from .utils import dict_to_json
 from .const_dataset import DATASET_TYPES, DATASET_FIELDS
 from .const_model import MODEL_RESULTS  
 from .const_stats import TEST_STATISTICS_FIELDS
