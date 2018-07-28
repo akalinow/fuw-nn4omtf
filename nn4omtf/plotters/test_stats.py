@@ -41,7 +41,7 @@ def _plot_response(content, opts):
         plt.title(title, size=opts.title_size)
         plt.ylabel('Kod klasy - odpowiedź', size=opts.ylabel_size)
         plt.xlabel('Rzeczywisty kod klasy', size=opts.xlabel_size)
-        plt.xticks(range(xn), xl, size=opts.xticks_size)
+        plt.xticks(range(xn), xl, size=opts.xticks_size, rotation='vertical')
         plt.yticks(range(yn), yl, size=opts.yticks_size)
         cb = plt.colorbar()
         cb.set_label('Unormowana częstość odpowiedzi', size=opts.colorbar_fontsize)
@@ -84,17 +84,20 @@ def _plot_curves(content, opts):
             for i, (a, b) in enumerate(omtf_ranges[1:]):
                 if a >= treshold:
                     o_idx = i + 1
+                    o_min, o_max = a, b
                     break
-            ax.plot(pt_codes, n_arr[idx], 'o-.', label='NN')
-            ax.plot(pt_codes, o_arr[o_idx], 'o-.', label='OMTF')
-            plt.axvline(x=ptc, c='#ff1111', linestyle='-.', label='kod: %d $p\in[%.1f, %.1f[$ GeV, $p_T$: %.1f GeV' % (ptc, ptc_min, ptc_max, treshold))
-            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f Gev\nZdarzenia: %s" % (treshold, desc), 
+            ax.plot(pt_codes, n_arr[idx], 'o-.', label='NN $p \geq %.1f$ GeV' % (nn_pt_min))
+            ax.plot(pt_codes, o_arr[o_idx], 'o-.', label='OMTF $p \geq %.1f$ GeV' % (o_min))
+            cut_desc = 'Cięcie: kod %d, $p\in[%.1f, %.1f[$ GeV' % (ptc, ptc_min, ptc_max)
+            plt.axvline(x=ptc, c='#ff1111', linestyle='-.', linewidth=1)
+            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f Gev\n%s\nZdarzenia: %s" % (treshold, cut_desc,desc), 
                     size=opts.title_size)
-            ax.legend(loc=opts.legend_loc,  fontsize=opts.legend_fontsize)
+            ax.legend(loc=opts.legend_loc,  fontsize=opts.legend_fontsize, frameon=True, fancybox=True, framealpha=0.7)
             ax.set_xlabel('Kod pędowy', size=opts.xlabel_size)
             plt.yticks(size=opts.yticks_size)
             ax.set_ylabel('Efektywność', size=opts.ylabel_size)
-            plt.xticks(size=opts.xticks_size)
+            plt.xticks(range(1, len(pt_codes) + 1), pt_codes, size=opts.xticks_size)
+            ax.set_ylim(-0.05, 1.05)
             fig.tight_layout()
             plots += [('curve-%s-%.1f' % (nk, treshold), fig)]
     return plots
