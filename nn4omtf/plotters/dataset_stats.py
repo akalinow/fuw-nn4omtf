@@ -112,6 +112,46 @@ def _plot_train_ordering(content, opts):
     return [('train_examples_ordering', fig)]
 
 
+def _plot_examples_distr(content, opts):
+    signatures = content[DSET_STAT_FIELDS.MUON_SIGNATURES]
+    data = content[DSET_STAT_FIELDS.MUON_SIGNATURES_DISTR]
+    keys = list(data.keys())
+    keys.sort()
+    vals = [data[k] for k in keys]
+    _all = list(zip(signatures, zip(*tuple(vals))))
+
+    _all = [(int(v), str(s), d) for (v, s), d in _all]
+    _all.sort(key=lambda x: x[1])
+    _all.sort(key=lambda x: x[0])
+    
+    labels = ['0'] + ["%s%d" % ('+' if s == 'p' else '-', v) for v, s, _ in _all]
+    vals = list(zip(*[d for _, _, d in _all]))
+    _vals = []
+    for l in vals:
+        not_null = [x for x, _ in l] 
+        null = sum([x for _, x in l])
+        _vals.append([null] + not_null)
+    vals = _vals
+
+    w = 0.5
+    l = len(labels)
+    ws = [w for _ in labels]
+    xs = np.arange(l)
+
+    fig, axs = plt.subplots(3,1, figsize=(10, 9), dpi=150, sharex=True)
+
+    for k, vs, ax in zip(keys, vals, axs):
+        ax.bar(xs, vs, ws, label=k)
+        ax.set_ylabel('Liczba przykładów', size=opts.ylabel_size)
+        ax.set_title(k, size=opts.title_size)
+        ax.set_yscale('log')
+
+    plt.xticks(xs)
+    ax.set_xticklabels(labels, rotation='vertical')
+    fig.tight_layout()
+    return [('examples_distr', fig)]
+
+
 def dataset_stat_plotter(content, config):
     opts = dict_to_object(config)
     sns.set_style(opts.sns_style)
@@ -119,6 +159,7 @@ def dataset_stat_plotter(content, config):
     plots += _plot_train_ordering(content, opts)
     plots += _plot_hists_total(content, opts)
     plots += _plot_hists_codes(content, opts)
+    plots += _plot_examples_distr(content, opts)
     return plots
 
 

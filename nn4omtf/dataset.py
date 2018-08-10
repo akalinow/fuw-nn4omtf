@@ -154,7 +154,7 @@ class OMTFDataset:
             g_tot += good_per_file
         print("Events taken from single file:")
         print("total: {}, good: {}, null: {}".format(g_tot+n_tot, g_tot, n_tot))
-        return partition
+        return partition, g_tot, n_tot
     
 
     def add_histograms_for_file(self, hits, htype=HIST_TYPES.VALS, 
@@ -210,9 +210,12 @@ class OMTFDataset:
         """
         Generate balanced datasets.
         """
-        partition = self.get_partition()
+        partition, g_tot, n_tot = self.get_partition()
         dataset = dict(zip(self.names, [None] * 3))
+        # Do NOT use [[]] * 3 here !!
+        signatures_distr = dict(zip(self.names, [[], [], []]))
         signatures = []
+
         for fn in self.files:
             print('Reading data from: %s' % fn)
             data = np.load(fn)
@@ -235,6 +238,22 @@ class OMTFDataset:
             good_n = np.sum(good_mask)
             null_mask = hits_avg >= self.treshold
             null_n = np.sum(null_mask)
+            good_f = 1
+            null_f = 1
+            print('Events available in file: %d', hits_avg.shape[0])
+            print('   good: %d', good_n)
+            print('   null: %d', null_n)
+
+            if null_n < n_tot:
+                print('Not enough null events in file: %s' % fn)
+                print('Required null: %d' % (n_tot))
+                print('Scaling number of null examples')
+                null_f = null_n / n_tot
+            if good_n < g_tot:
+                print('Not enough events in file: %s' % fn)
+                print('Required good: %d' % (g_tot))
+                print('Scaling number of good examples')
+                good_f = good_n / g_tot
             
             if self.transform is not None:
                 # Apply data transformation
@@ -256,8 +275,14 @@ class OMTFDataset:
             null_data += [np.ones(null_n) * code]
 
             for (gb, ge, nb, ne), name  in zip(partition, self.names):
+                gb = int(gb * good_f)
+                ge = int(ge * good_f)
+                nb = int(nb * null_f)
+                ne = int(ne * null_f)
                 _good_data = [_data[gb:ge] for _data in good_data]
                 _null_data = [_data[nb:ne] for _data in null_data]
+                signatures_distr[name] += [(_good_data[0].shape[0], 
+                    _null_data[0].shape[0])]
                 if dataset[name] is None:
                     dataset[name] = [np.concatenate((_gd, _nd), axis=0) 
                             for _gd, _nd in zip(_good_data, _null_data)]
@@ -283,6 +308,7 @@ class OMTFDataset:
                 shuffled=True)
         self.dataset = dataset
         self.signatures = signatures
+        self.signatures_distr = signatures_distr
         
         
     def save_dataset(self, prefix, single_file=True):
@@ -363,6 +389,7 @@ class OMTFDataset:
 
         stats[DSET_STAT_FIELDS.HISTS_BINS] = self.bins
         stats[DSET_STAT_FIELDS.MUON_SIGNATURES] = self.signatures
+        stats[DSET_STAT_FIELDS.MUON_SIGNATURES_DISTR] = self.signatures_distr
         stats[DSET_STAT_FIELDS.TRANSFORM] = self.transform
         stats[DSET_STAT_FIELDS.TRESHOLD] = self.treshold
 
