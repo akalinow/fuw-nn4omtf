@@ -99,7 +99,9 @@ def _plot_curves(content, opts):
             plt.xticks(range(1, len(pt_codes) + 1), pt_codes, size=opts.xticks_size)
             ax.set_ylim(-0.05, 1.05)
             fig.tight_layout()
-            plots += [('curve-%s-%.1f' % (nk, treshold), fig)]
+            name = 'curve-%s-%.1f' % (nk, treshold)
+            name = name.replace('.', '-')
+            plots += [(name, fig)]
     return plots
 
 
