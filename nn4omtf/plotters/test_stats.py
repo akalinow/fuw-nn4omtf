@@ -86,11 +86,11 @@ def _plot_curves(content, opts):
                     o_idx = i + 1
                     o_min, o_max = a, b
                     break
-            ax.plot(pt_codes, n_arr[idx], 'o-.', label='NN $p \geq %.1f$ GeV' % (nn_pt_min))
-            ax.plot(pt_codes, o_arr[o_idx], 'o-.', label='OMTF $p \geq %.1f$ GeV' % (o_min))
-            cut_desc = 'Cięcie: kod %d, $p\in[%.1f, %.1f[$ GeV' % (ptc, ptc_min, ptc_max)
+            ax.plot(pt_codes, n_arr[idx], 'o-.', label='NN $p_T \geq %.1f$ GeV' % (nn_pt_min))
+            ax.plot(pt_codes, o_arr[o_idx], 'o-.', label='OMTF $p_T \geq %.1f$ GeV' % (o_min))
+            cut_desc = 'Cięcie: kod %d, $p_T\in[%.1f, %.1f[$ GeV' % (ptc, ptc_min, ptc_max)
             plt.axvline(x=ptc, c='#ff1111', linestyle='-.', linewidth=1)
-            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f Gev\n%s\nZdarzenia: %s" % (treshold, cut_desc,desc), 
+            ax.set_title("Krzywa włączeniowa  $p_T$ > %.1f GeV\n%s\nZdarzenia: %s" % (treshold, cut_desc,desc), 
                     size=opts.title_size)
             ax.legend(loc=opts.legend_loc,  fontsize=opts.legend_fontsize, frameon=True, fancybox=True, framealpha=0.7)
             ax.set_xlabel('Kod pędowy', size=opts.xlabel_size)
